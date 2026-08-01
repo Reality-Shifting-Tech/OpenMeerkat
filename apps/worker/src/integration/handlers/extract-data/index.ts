@@ -1,0 +1,264 @@
+import { aiTimeouts } from "@openmeerkat/ai"
+import { contactCustomFieldService } from "@openmeerkat/business"
+import type { AIExtractDataSchema } from "@openmeerkat/flow-config"
+import { contactVariableService } from "@openmeerkat/variables"
+import { APICallError, generateObject } from "ai"
+import { normalizeError } from "universal-error-normalizer"
+import { z } from "zod"
+import { logger } from "../../../lib/logger"
+import { saveResultToCustomField } from "../../utils/contact"
+import {
+  sendMessageWithRender,
+  waitForChatJobCompletion,
+} from "../../utils/message"
+import type { ExecuteStepProps } from "../flow"
+import { resolveFlowAIModel } from "../shared/flow-ai-model-resolver"
+import type { ExecuteStepResult } from "../step"
+
+const ERROR_INSUFFICIENT_CREDITS =
+  "AI provider has insufficient credits. Please check your billing settings."
+
+type AIExtractUserContent =
+  | { type: "text"; text: string }
+  | { type: "image"; image: string }
+  | { type: "file"; data: string; mediaType: string }
+
+const INPUT_FILE_MEDIA_TYPE = "application/pdf"
+
+const stringifyFieldValue = (value: unknown) => {
+  if (typeof value === "string") {
+    return value
+  }
+
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const getInputValue = async (props: {
+  step: AIExtractDataSchema
+  conversation: ExecuteStepProps<AIExtractDataSchema>["conversation"]
+  contactInbox: ExecuteStepProps<AIExtractDataSchema>["contactInbox"]
+}) => {
+  const { step, conversation, contactInbox } = props
+
+  if (step.inputType === "text") {
+    let inputText = step.inputFieldId.trim()
+
+    const variables = await contactVariableService.getAll({
+      contactId: conversation.contactId,
+      contactInbox,
+      conversation,
+    })
+
+    inputText = await contactVariableService.replaceAll({
+      text: inputText,
+      variables,
+    })
+
+    if (step.file) {
+      inputText = inputText.replace(step.file.attribute, step.file.value)
+    }
+
+    return inputText.length > 0 ? inputText : null
+  }
+
+  const inputValue = await contactCustomFieldService.findValue({
+    contactId: conversation.contactId,
+    customFieldId: step.inputFieldId,
+  })
+
+  if (typeof inputValue !== "string") {
+    return null
+  }
+
+  return inputValue.trim().length > 0 ? inputValue : null
+}
+
+const buildUserContent = (props: {
+  inputType: AIExtractDataSchema["inputType"]
+  inputValue: string
+}): AIExtractUserContent[] => {
+  const { inputType, inputValue } = props
+
+  const content: AIExtractUserContent[] = []
+
+  if (inputType === "text") {
+    content.push({ type: "text", text: inputValue })
+  } else if (inputType === "image") {
+    content.push({ type: "image", image: inputValue })
+  } else {
+    content.push({
+      type: "file",
+      data: inputValue,
+      mediaType: INPUT_FILE_MEDIA_TYPE,
+    })
+  }
+
+  content.push({
+    type: "text",
+    text: `Please extract data from this ${inputType}`,
+  })
+
+  return content
+}
+
+export async function handleAIExtractData({
+  contactInbox,
+  conversation,
+  step,
+}: ExecuteStepProps<AIExtractDataSchema>): Promise<ExecuteStepResult> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), aiTimeouts.aiTotal)
+
+  const logContext = {
+    workspaceId: conversation.workspaceId,
+    conversationId: conversation.id,
+    stepId: step.id,
+    toolName: "aiExtractData",
+  }
+
+  try {
+    if (step.extractFields.length === 0) {
+      return {
+        status: "skip",
+        result: { message: "No extract fields configured" },
+      }
+    }
+
+    const inputValue = await getInputValue({
+      step,
+      conversation,
+      contactInbox,
+    })
+
+    if (!inputValue) {
+      return {
+        status: "skip",
+        result: { message: "Input field is empty" },
+      }
+    }
+
+    const resolvedModel = await resolveFlowAIModel({
+      workspaceId: conversation.workspaceId,
+      provider: step.provider,
+      integrationId:
+        step.provider === "openaiCompatible" ? step.integrationId : undefined,
+      modelId: step.model,
+      conversationId: conversation.id,
+    })
+
+    if (!resolvedModel.ok) {
+      logger.warn(
+        {
+          ...logContext,
+          provider: step.provider,
+          integrationId:
+            step.provider === "openaiCompatible"
+              ? step.integrationId
+              : undefined,
+          modelId: step.model,
+          reason: resolvedModel.reason,
+        },
+        "[ai-extract-data] Failed to resolve AI model",
+      )
+      return {
+        status: "error",
+        errorMessage: resolvedModel.message,
+        result: null,
+      }
+    }
+
+    const schemaDescription = step.extractFields
+      .map((f) =>
+        f.description ? `- ${f.key}: ${f.description}` : `- ${f.key}`,
+      )
+      .join("\n")
+
+    const systemPrompt = `You are a data extraction expert. Extract the following information from the provided ${step.inputType}.
+Fields to extract:
+${schemaDescription}`
+
+    const userContent = buildUserContent({
+      inputType: step.inputType,
+      inputValue,
+    })
+
+    const dynamicSchema = z.object(
+      Object.fromEntries(
+        step.extractFields.map(({ key }) => [
+          key,
+          z.string().nullable().describe(`The value for ${key}`),
+        ]),
+      ),
+    )
+
+    const userMessage = {
+      role: "user",
+      content: userContent,
+    } as const
+
+    const { object: extractedData } = await generateObject({
+      model: resolvedModel.model,
+      system: systemPrompt,
+      messages: [userMessage],
+      abortSignal: controller.signal,
+      schema: dynamicSchema,
+    })
+
+    await Promise.all(
+      step.extractFields.map(async (mapping) => {
+        const value = extractedData[mapping.key]
+        if (value === undefined || value === null) {
+          return
+        }
+
+        await saveResultToCustomField({
+          contactId: conversation.contactId,
+          customFieldId: mapping.customFieldId,
+          fullText: stringifyFieldValue(value),
+          workspaceId: conversation.workspaceId,
+        })
+      }),
+    )
+
+    return {
+      status: "success",
+      result: extractedData,
+    }
+  } catch (error) {
+    if (APICallError.isInstance(error) && error.statusCode === 402) {
+      logger.error({ err: error }, "AI provider insufficient credits")
+      return {
+        status: "error",
+        errorMessage: ERROR_INSUFFICIENT_CREDITS,
+        result: null,
+      }
+    }
+    const parsedError = normalizeError(error)
+    logger.error(
+      {
+        ...logContext,
+        err: parsedError,
+        reason: "ai_generation_failed",
+      },
+      "Error in handleAIExtractData",
+    )
+
+    const job = await sendMessageWithRender(
+      conversation.id,
+      "Error extracting data",
+    )
+    await waitForChatJobCompletion(job, { conversationId: conversation.id })
+
+    return {
+      status: "error",
+      errorMessage: parsedError.message,
+      result: null,
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}

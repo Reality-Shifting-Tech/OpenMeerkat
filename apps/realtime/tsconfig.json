@@ -1,0 +1,8 @@
+{
+  "extends": "@openmeerkat/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

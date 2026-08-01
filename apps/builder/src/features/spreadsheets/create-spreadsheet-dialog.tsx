@@ -1,0 +1,142 @@
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
+import { InputField } from "@openmeerkat/ui/components/form/input-field"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { Form } from "@openmeerkat/ui/components/ui/form"
+import { Loader2Icon, PlusIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import { type ReactElement, type ReactNode, useState } from "react"
+import { toast } from "sonner"
+import { createSpreadsheetAction } from "./actions/create-spreadsheet-action"
+import { createSpreadsheetRequest } from "./schema/mutation"
+
+export function CreateSpreadsheetDialog({
+  workspaceId,
+  triggerButton,
+  onSuccess,
+}: {
+  workspaceId: string
+  triggerButton?: ReactNode
+  onSuccess?: () => void
+}) {
+  const t = useTranslations()
+  const [open, setOpen] = useState(false)
+  const router = useRouter()
+
+  const { form, handleSubmitWithAction, resetFormAndAction } =
+    useHookFormAction(
+      createSpreadsheetAction.bind(null, workspaceId),
+      zodResolver(createSpreadsheetRequest),
+      {
+        actionProps: {
+          onSuccess: () => {
+            toast.success(
+              t("messages.createSuccess", {
+                feature: t("fields.spreadsheet.label"),
+              }),
+            )
+
+            setOpen(false)
+            resetFormAndAction()
+
+            if (onSuccess) {
+              onSuccess()
+            } else {
+              router.refresh()
+            }
+          },
+          onError: ({ error }) => {
+            if (error.serverError) {
+              toast.error(error.serverError)
+            }
+          },
+        },
+        formProps: {
+          mode: "onChange",
+          defaultValues: {
+            name: "",
+            url: "",
+          },
+        },
+        errorMapProps: {},
+      },
+    )
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger
+        render={
+          triggerButton ? (
+            (triggerButton as ReactElement)
+          ) : (
+            <Button size="sm">
+              <PlusIcon />
+              {t("actions.addFeature", {
+                feature: t("fields.spreadsheet.label"),
+              })}
+            </Button>
+          )
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("actions.add")}</DialogTitle>
+          <DialogDescription />
+        </DialogHeader>
+        <div className="flex items-center space-x-2">
+          <Form {...form}>
+            <form
+              className="flex-1 space-y-4"
+              onSubmit={handleSubmitWithAction}
+            >
+              <InputField label={t("fields.name.label")} name="name" required />
+
+              <InputField
+                label={t("fields.url.label")}
+                name="url"
+                placeholder="https://docs.google.com/spreadsheets/d/xyz/edit"
+                required
+              />
+
+              <DialogFooter className="justify-end">
+                <DialogClose
+                  render={
+                    <Button size="sm" type="button" variant="ghost">
+                      {t("actions.cancel")}
+                    </Button>
+                  }
+                />
+
+                <Button
+                  disabled={
+                    !form.formState.isValid || form.formState.isSubmitting
+                  }
+                  size="sm"
+                  type="submit"
+                >
+                  {form.formState.isSubmitting && (
+                    <Loader2Icon className="animate-spin" />
+                  )}
+                  {t("actions.confirm")}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -1,0 +1,69 @@
+"use server"
+
+import { uploader } from "@openmeerkat/filesystem"
+import type {
+  CreateMessageTemplateProps,
+  WhatsappAuthValue,
+} from "@openmeerkat/integration-whatsapp"
+import slugify from "@sindresorhus/slugify"
+import {
+  type WorkspaceIdRequestParams,
+  workspaceIdrequestParams,
+} from "@/features/common/schemas"
+import { integrations } from "@/integration"
+import { workspaceActionClient } from "@/lib/safe-action"
+import {
+  type CreateMessageTemplateRequest,
+  createMessageTemplateRequest,
+} from "../schemas/create-message-templates-schema"
+import { parseComponents } from "./utils"
+
+export const createMessageTemplateAction = workspaceActionClient
+  .bindArgsSchemas(workspaceIdrequestParams)
+  .inputSchema(createMessageTemplateRequest)
+  .action(
+    async ({
+      bindArgsParsedInputs: [workspaceId],
+      parsedInput,
+    }: {
+      bindArgsParsedInputs: WorkspaceIdRequestParams
+      parsedInput: CreateMessageTemplateRequest
+    }) => {
+      const integrationWhatsapp =
+        await findOrFail(integrationWhatsappModel, {
+          workspaceId,
+        })
+      const ctx = {
+        auth: integrationWhatsapp.auth as WhatsappAuthValue,
+        uploader,
+      }
+      const body: CreateMessageTemplateProps = {
+        name: slugify(parsedInput.name),
+        category: parsedInput.category,
+        language: parsedInput.language,
+        components: await parseComponents(
+          ctx,
+          parsedInput.templateType,
+          parsedInput.content,
+        ),
+      }
+
+      const res = await integrations.whatsapp.runAction(
+        "createMessageTemplate",
+        {
+          ctx,
+          data: body,
+        },
+      )
+
+      await db.insert(whatsappMessageTemplate).values({
+        id: createId(),
+        name: parsedInput.name,
+        integrationWhatsappId: integrationWhatsapp.id,
+        language: parsedInput.language,
+        category: parsedInput.category,
+        status: res.status,
+        sourceId: res.id,
+      })
+    },
+  )

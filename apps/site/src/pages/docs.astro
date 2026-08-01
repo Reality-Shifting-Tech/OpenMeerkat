@@ -1,0 +1,157 @@
+---
+const GITHUB = "https://github.com/Reality-Shifting-Tech/OpenMeerkat"
+const DOCS_ROOT = `${GITHUB}/tree/main/docs`
+
+const steps = [
+  {
+    n: "01",
+    title: "Start local infrastructure",
+    body: "docker compose up -d starts PostgreSQL, Redis, object storage, and MailHog.",
+  },
+  {
+    n: "02",
+    title: "Configure the environment",
+    body: "cp .env.example .env, then edit the values. The example file documents every setting.",
+  },
+  {
+    n: "03",
+    title: "Install dependencies",
+    body: "pnpm install from the repository root installs every package in the monorepo.",
+  },
+  {
+    n: "04",
+    title: "Set up the database",
+    body: "pnpm --filter @openmeerkat/database db:setup migrates and seeds. Migrations are applied explicitly, never automatically.",
+  },
+  {
+    n: "05",
+    title: "Run the stack",
+    body: "pnpm dev starts the builder on :3123, the worker, and the realtime server. Connect a channel from the builder and you are live.",
+  },
+]
+
+const quickstart = `$ docker compose up -d
+$ cp .env.example .env
+$ pnpm install
+$ pnpm --filter @openmeerkat/database db:setup
+$ pnpm dev   # builder :3123 · worker · realtime`
+
+const docLinks = [
+  {
+    tag: "developer/",
+    title: "Developer guide",
+    body: "Architecture, packages, and how the monorepo fits together.",
+  },
+  {
+    tag: "flows.md",
+    title: "Flows",
+    body: "The flow model, nodes, variables, and how conversations execute.",
+  },
+  {
+    tag: "licensing.md",
+    title: "Licensing",
+    body: "AGPL-3.0 terms and what they mean for forks and hosting.",
+  },
+  {
+    tag: "tech-stack.md",
+    title: "Tech stack",
+    body: "Next.js, React, PostgreSQL, Redis, BullMQ, and the realtime layer.",
+  },
+  {
+    tag: "tenancy.md",
+    title: "Tenancy",
+    body: "How workspaces, channels, and data isolation are structured.",
+  },
+  {
+    tag: "websocket.md",
+    title: "WebSocket",
+    body: "The realtime protocol used by the builder, webchat, and the API.",
+  },
+]
+---
+
+<Layout
+  title="Docs | OpenMeerkat"
+  description="OpenMeerkat documentation and quickstart: run the full platform locally in five steps, from docker compose up to your first connected channel."
+>
+  <section class="page-hero">
+    <div class="wrap">
+      <p class="kicker">Docs</p>
+      <h1>Documentation and quickstart.</h1>
+      <p class="lede">
+        The full documentation lives in the repository while the hosted docs
+        site is being built. Start with the quickstart below, then go deeper in
+        the docs directory.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Quickstart.</h2>
+        <p class="sub">
+          From an empty machine to a live channel in five steps. This is the
+          exact flow from the repository README.
+        </p>
+      </div>
+
+      <div class="steps">
+        {
+          steps.map((s) => (
+            <div class="step">
+              <span class="num">{s.n}</span>
+              <div>
+                <h3>{s.title}</h3>
+                <p>{s.body}</p>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="terminal" style="margin-top: 40px">
+        <p class="dim"># first bot, from zero</p>
+        <p>{quickstart.split("\n").map((line) => <span>{line}<br /></span>)}</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Repository docs.</h2>
+        <p class="sub">
+          Hosted docs are planned. Until then, the repository is the source of
+          truth: the README for orientation, docs/ for depth.
+        </p>
+      </div>
+
+      <div class="cards">
+        {
+          docLinks.map((d) => (
+            <a class="card" href={`${DOCS_ROOT}/${d.tag}`} target="_blank">
+              <p class="card-tag">{d.tag}</p>
+              <h3>{d.title}</h3>
+              <p>{d.body}</p>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Got stuck?</h2>
+      <p>
+        Open an issue on GitHub, or email us directly. We answer, and we do
+        not make you dig through a forum first.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href={GITHUB}>Open an issue</a>
+        <a class="btn primary dark" href="mailto:elias@realityshifting.tech">Email us</a>
+      </div>
+    </div>
+  </section>
+</Layout>

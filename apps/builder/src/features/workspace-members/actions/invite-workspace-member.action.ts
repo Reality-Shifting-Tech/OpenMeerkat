@@ -1,0 +1,70 @@
+"use server"
+
+import {
+  quotaEnforcementService,
+  workspaceService,
+} from "@openmeerkat/business"
+import { OpenMeerkatException } from "@openmeerkat/business/errors"
+import { db } from "@openmeerkat/database/client"
+import { invitationModel } from "@openmeerkat/database/schema"
+import { createId, SymbolicSnowflakeIDs } from "@openmeerkat/utils"
+import { addDays } from "date-fns"
+import { isCommunity } from "@/env"
+import { workspaceIdrequestParams } from "@/features/common/schemas"
+import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
+import { getCurrentUserAndTargetWorkspace } from "@/lib/auth/utils"
+import { workspaceActionClient } from "@/lib/safe-action"
+import {
+  getSuperAdminPermissions,
+  normalizeContactsPermissions,
+} from "../helpers"
+import { inviteWorkspaceMemberRequest } from "../schema/mutation"
+
+export const inviteWorkspaceMemberAction = workspaceActionClient
+  .bindArgsSchemas(workspaceIdrequestParams)
+  .inputSchema(inviteWorkspaceMemberRequest)
+  .action(async ({ ctx, parsedInput, bindArgsParsedInputs: [workspaceId] }) => {
+    // Read-only gate: team-member usage is reconcile-counted after acceptance,
+    // so block issuing an invitation once the owner is already at the limit.
+    const workspace = await workspaceService.findById({ id: workspaceId })
+    const currentUserAndTargetChatbot =
+      await getCurrentUserAndTargetWorkspace(workspaceId)
+    if (!currentUserAndTargetChatbot) {
+      throw new OpenMeerkatException(
+        "You are not authorized to invite a workspace member",
+      )
+    }
+
+    const currentPermissions =
+      currentUserAndTargetChatbot.targetWorkspaceMember.permissions
+    if (!hasWorkspacePermission(currentPermissions, "superAdmin")) {
+      throw new OpenMeerkatException(
+        "You are not authorized to invite a workspace member. You need to be a super admin to do this.",
+      )
+    }
+
+    const atLimit = await quotaEnforcementService.hasReachedLimit({
+      userId: workspace.ownerId,
+      metric: "teamMembers",
+    })
+    if (atLimit) {
+      throw new OpenMeerkatException(
+        "Team member limit reached for this workspace plan",
+      )
+    }
+
+    return await db
+      .insert(invitationModel)
+      .values({
+        id: createId(),
+        code: SymbolicSnowflakeIDs.generate(),
+        permissions: isCommunity()
+          ? getSuperAdminPermissions()
+          : normalizeContactsPermissions(parsedInput.permissions),
+        expiresAt: addDays(new Date(), 1),
+        workspaceId,
+        invitedBy: ctx.user.id,
+      })
+      .returning()
+      .then((result) => result[0])
+  })

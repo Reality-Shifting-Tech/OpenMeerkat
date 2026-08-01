@@ -1,0 +1,205 @@
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
+import {
+  type GiphyCredentialUpdate,
+  giphyCredentialUpdateSchema,
+} from "@openmeerkat/database/partials"
+import { InputField } from "@openmeerkat/ui/components/form/input-field"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@openmeerkat/ui/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { Form } from "@openmeerkat/ui/components/ui/form"
+import { Loader2Icon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import { useAction } from "next-safe-action/hooks"
+import { useState } from "react"
+import { toast } from "sonner"
+import { CredentialFallbackNote } from "../credential-fallback-note"
+import { DeleteCredentialDialog } from "../delete-credential-dialog"
+import { useCredentialScope } from "../provider/credential-scope-context"
+import { deleteGiphySettingsAction } from "./delete-giphy-settings.action"
+import { updateGiphySettingsAction } from "./update-giphy-settings.action"
+
+export function GiphySettings({
+  isConfigured,
+  isInherited = false,
+}: {
+  isConfigured: boolean
+  isInherited?: boolean
+}) {
+  const t = useTranslations()
+
+  return (
+    <Card>
+      <CardHeader className="items-center justify-center">
+        <CardTitle className="flex items-center gap-2">
+          <span className="font-semibold text-lg">GIPHY</span>
+        </CardTitle>
+        <CardAction>
+          <EditGiphySettingsDialog isConfigured={isConfigured} />
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {isConfigured ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col">
+              <div className="font-bold">{t("fields.apiKey.label")}:</div>
+              <div className="flex items-center gap-2">
+                <span className="truncate">••••••••</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <CredentialFallbackNote isInherited={isInherited} />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function EditGiphySettingsDialog({
+  isConfigured,
+}: {
+  isConfigured: boolean
+}) {
+  const t = useTranslations()
+  const [open, setOpen] = useState(false)
+  const router = useRouter()
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger
+        render={
+          <Button size="sm" type="button">
+            {t("actions.edit")}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogTitle>
+          {t("messages.editFeature", { feature: "GIPHY" })}
+        </DialogTitle>
+
+        <EditGiphySettingsForm
+          isConfigured={isConfigured}
+          onClose={() => {
+            setOpen(false)
+            router.refresh()
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function EditGiphySettingsForm({
+  isConfigured,
+  onClose,
+}: {
+  isConfigured: boolean
+  onClose?: () => void
+}) {
+  const t = useTranslations()
+  const scope = useCredentialScope()
+  const { execute: executeDelete, isPending: isDeleting } = useAction(
+    deleteGiphySettingsAction.bind(null, scope),
+    {
+      onSuccess: () => {
+        toast.success(t("messages.deletedSuccess", { feature: "GIPHY" }))
+        onClose?.()
+      },
+      onError: ({ error }) =>
+        error.serverError && toast.error(error.serverError),
+    },
+  )
+
+  const { form, handleSubmitWithAction, resetFormAndAction } =
+    useHookFormAction(
+      updateGiphySettingsAction.bind(null, scope),
+      zodResolver(giphyCredentialUpdateSchema),
+      {
+        actionProps: {
+          onSuccess: () => {
+            onClose?.()
+          },
+          onError: ({ error }) => {
+            if (error.serverError) {
+              toast.error(error.serverError)
+            }
+          },
+        },
+        formProps: {
+          mode: "onChange",
+          defaultValues: {
+            apiKey: "",
+          } satisfies GiphyCredentialUpdate,
+        },
+      },
+    )
+
+  return (
+    <Form {...form}>
+      <form className="flex flex-col gap-4" onSubmit={handleSubmitWithAction}>
+        <InputField
+          description={
+            isConfigured ? t("messages.leaveEmptyToKeepSecret") : undefined
+          }
+          label={t("fields.apiKey.label")}
+          name="apiKey"
+          required={!isConfigured}
+          type="password"
+        />
+
+        <div className="flex items-center justify-between gap-2">
+          {isConfigured && (
+            <DeleteCredentialDialog
+              disabled={form.formState.isSubmitting}
+              feature="GIPHY"
+              isDeleting={isDeleting}
+              onConfirm={() => executeDelete()}
+            />
+          )}
+          <div className="ms-auto flex gap-2">
+            <Button
+              onClick={() => {
+                resetFormAndAction()
+                onClose?.()
+              }}
+              type="button"
+              variant="outline"
+            >
+              {t("actions.cancel")}
+            </Button>
+            <Button
+              disabled={
+                !form.formState.isValid ||
+                form.formState.isSubmitting ||
+                isDeleting
+              }
+              type="submit"
+            >
+              {form.formState.isSubmitting && (
+                <Loader2Icon className="size-4 animate-spin" />
+              )}
+              {t("actions.save")}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Form>
+  )
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@openmeerkat/integration-mailchimp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "@noble/hashes": "^2.2.0",
+    "ky": "^2.0.2",
+    "universal-error-normalizer": "^1.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@types/node": "^24.10.4",
+    "typescript": "^5"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./**/*": "./src/**/*.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check-types": "tsc --noEmit"
+  }
+}

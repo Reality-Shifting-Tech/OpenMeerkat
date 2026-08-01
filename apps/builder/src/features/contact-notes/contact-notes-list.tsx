@@ -1,0 +1,72 @@
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@openmeerkat/ui/components/ui/tooltip"
+import { formatDate } from "@openmeerkat/ui/lib/format"
+import { CircleUserRound, PencilIcon, TrashIcon } from "lucide-react"
+import { useLocale } from "next-intl"
+import type { ContactNoteResource } from "./schemas/resource"
+
+export function ContactNoteList({
+  allContactNotes,
+  onEdit,
+  onDelete,
+}: {
+  allContactNotes: ContactNoteResource[]
+  onEdit: (contactNote: ContactNoteResource) => void
+  onDelete: (contactNote: ContactNoteResource) => void
+}) {
+  const locale = useLocale()
+
+  return (
+    <div className="flex w-full flex-col">
+      {allContactNotes.map((contactNote) => (
+        <div className="flex w-full flex-col" key={contactNote.id}>
+          <div className="flex w-full">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <div className="flex flex-1 items-center gap-2 text-sm">
+                      <CircleUserRound />
+                      <div>
+                        {formatDate(contactNote.updatedAt, {
+                          month: "short",
+                          locale,
+                        })}
+                      </div>
+                    </div>
+                  }
+                />
+                <TooltipContent>
+                  <p>{contactNote.createdBy?.name ?? "Unknown"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              onClick={() => onEdit(contactNote)}
+              size="icon"
+              variant="ghost"
+            >
+              <PencilIcon />
+            </Button>
+            <Button
+              className="text-destructive"
+              onClick={() => onDelete(contactNote)}
+              size="sm"
+              variant="ghost"
+            >
+              <TrashIcon />
+            </Button>
+          </div>
+          <div className="mb-4 w-full whitespace-pre-wrap text-gray-500 text-sm">
+            {contactNote.text}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

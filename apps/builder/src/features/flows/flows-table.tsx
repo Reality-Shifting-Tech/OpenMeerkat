@@ -1,0 +1,119 @@
+"use client"
+
+import { DataTable } from "@openmeerkat/ui/components/data-table/data-table"
+import { DataTableToolbar } from "@openmeerkat/ui/components/data-table/data-table-toolbar"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@openmeerkat/ui/components/ui/card"
+import { useDataTable } from "@openmeerkat/ui/hooks/use-data-table"
+import type { DataTableRowAction } from "@openmeerkat/ui/types/data-table"
+import { useRouter } from "next/navigation"
+import { useLocale, useTranslations } from "next-intl"
+import { use, useMemo, useState } from "react"
+import { ChangeFolderDialog } from "../folders/change-folder"
+import { CreateFlowDialog } from "./create-flow-dialog"
+import { DeleteFlowsDialog } from "./delete-flow-dialog"
+import { DuplicateFlowDialog } from "./duplicate-flow-dialog"
+import { getFlowColumns } from "./flows-table-columns"
+import { FlowsTableToolbarActions } from "./flows-table-toolbar-actions"
+import type { listFlowsRSC } from "./queries"
+import { RenameFlowDialog } from "./react-flow/components/rename-flow"
+import type { FlowResource } from "./schemas/resource"
+
+type FlowsTableProps = {
+  promises: Promise<[Awaited<ReturnType<typeof listFlowsRSC>>]>
+  workspaceId: string
+  folderId: string | null
+}
+
+export function FlowsTable({
+  promises,
+  workspaceId,
+  folderId,
+}: FlowsTableProps) {
+  const t = useTranslations()
+  const locale = useLocale()
+  const router = useRouter()
+
+  const [{ data, pageCount }] = use(promises)
+
+  const [rowAction, setRowAction] =
+    useState<DataTableRowAction<FlowResource> | null>(null)
+  const columns = useMemo(
+    () => getFlowColumns({ t, setRowAction, locale }),
+    [t, locale],
+  )
+
+  const { table } = useDataTable({
+    data,
+    columns,
+    pageCount,
+    initialState: {
+      sorting: [{ id: "createdAt", desc: true }],
+      columnPinning: { right: ["actions"] },
+    },
+    getRowId: (originalRow) => originalRow.id,
+    shallow: false,
+    clearOnDefault: true,
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-bold text-xl">{t("flows.title")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <DataTable table={table}>
+          <DataTableToolbar table={table}>
+            <FlowsTableToolbarActions
+              setRowAction={setRowAction}
+              table={table}
+              workspaceId={workspaceId}
+            />
+            <CreateFlowDialog folderId={folderId} workspaceId={workspaceId} />
+          </DataTableToolbar>
+        </DataTable>
+
+        <DeleteFlowsDialog
+          flows={rowAction?.row.original ? [rowAction?.row.original] : []}
+          onOpenChange={() => setRowAction(null)}
+          onSuccess={() => {
+            rowAction?.row.toggleSelected(false)
+            router.refresh()
+          }}
+          open={rowAction?.variant === "delete"}
+          showTrigger={false}
+          workspaceId={workspaceId}
+        />
+
+        <DuplicateFlowDialog
+          flow={rowAction?.row.original || null}
+          onOpenChange={() => setRowAction(null)}
+          onSuccess={() => router.refresh()}
+          open={rowAction?.variant === "duplicate"}
+          workspaceId={workspaceId}
+        />
+
+        <RenameFlowDialog
+          flow={rowAction?.row.original || null}
+          onOpenChange={() => setRowAction(null)}
+          open={rowAction?.variant === "rename"}
+        />
+
+        <ChangeFolderDialog
+          currentFolderId={rowAction?.row.original?.folderId || null}
+          folderType="flow"
+          modelIds={
+            rowAction?.row.original ? [rowAction?.row.original.id] : null
+          }
+          onOpenChange={() => setRowAction(null)}
+          open={rowAction?.variant === "move"}
+          workspaceId={workspaceId}
+        />
+      </CardContent>
+    </Card>
+  )
+}

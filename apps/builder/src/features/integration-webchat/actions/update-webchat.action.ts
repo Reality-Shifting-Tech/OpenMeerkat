@@ -1,0 +1,41 @@
+"use server"
+
+import { db, eq, findOrFail } from "@openmeerkat/database/client"
+import { integrationWebchatModel } from "@openmeerkat/database/schema"
+import { zodBigintAsString } from "@openmeerkat/utils"
+import { workspaceActionClient } from "@/lib/safe-action"
+import { updateWebchatRequest } from "../schema/mutation"
+
+export const updateWebchatAction = workspaceActionClient
+  .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
+  .inputSchema(updateWebchatRequest)
+  .action(async (props) => {
+    const {
+      bindArgsParsedInputs: [workspaceId, id],
+      parsedInput,
+    } = props
+    const { authorizedDomains, welcomeFlowId, ...rest } = parsedInput
+
+    const integration = await findOrFail({
+      table: integrationWebchatModel,
+      where: {
+        id,
+        workspaceId,
+      },
+      message: "Webchat integration not found",
+    })
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(integrationWebchatModel)
+        .set({
+          ...rest,
+          workspaceId,
+          welcomeFlowId: welcomeFlowId?.length ? welcomeFlowId : null,
+          authorizedDomains: authorizedDomains
+            ? authorizedDomains.map((domain) => domain.value)
+            : undefined,
+        })
+        .where(eq(integrationWebchatModel.id, integration.id))
+    })
+  })

@@ -1,0 +1,35 @@
+{
+  "name": "@openmeerkat/imports",
+  "version": "0.1.0",
+  "type": "module",
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "^24.10.4",
+    "@types/unzipper": "^0.10.11",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@openmeerkat/database": "workspace:*",
+    "@openmeerkat/utils": "workspace:*",
+    "csv-parse": "^6.2.1",
+    "exceljs": "^4.4.0",
+    "unzipper": "^0.12.5",
+    "zod": "^4.3.6"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./file-validation": "./src/file-validation.ts",
+    "./registry": "./src/registry.ts",
+    "./parsers": "./src/parsers/index.ts",
+    "./parsers/headers": "./src/parsers/headers.ts",
+    "./stream-guard": "./src/stream-guard.ts",
+    "./modules/contacts": "./src/modules/contacts/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

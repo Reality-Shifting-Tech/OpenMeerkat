@@ -1,0 +1,33 @@
+import { integrationService } from "@openmeerkat/business"
+import {
+  createSelectSchema,
+  integrationModel,
+} from "@openmeerkat/database/schema"
+import z from "zod"
+import { workspaceTokenAuthAPI } from "@/orpc"
+
+const integrationResource = createSelectSchema(integrationModel, {
+  id: z.string(),
+  workspaceId: z.string(),
+})
+
+const listIntegrationsWorkspaceTokenAPI = workspaceTokenAuthAPI
+  .route({
+    method: "GET",
+    path: "/v1/integrations",
+    summary: "List integrations",
+    tags: ["Integrations"],
+  })
+  .output(z.object({ data: z.array(integrationResource) }))
+  .handler(async ({ context }) => {
+    const data = await integrationService.listByWorkspaceId(
+      context.workspace.id,
+    )
+    return { data }
+  })
+
+export const integrationsWorkspaceTokenAPIs = {
+  listIntegrationsWorkspaceTokenAPI,
+}
+
+export default integrationsWorkspaceTokenAPIs

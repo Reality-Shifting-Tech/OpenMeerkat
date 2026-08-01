@@ -1,0 +1,217 @@
+"use server"
+
+import { buildContext } from "@openmeerkat/business"
+import { moveBrandingMenuLast } from "@openmeerkat/business/branding"
+import { OpenMeerkatException } from "@openmeerkat/business/errors"
+import { db, eq, findOrFail } from "@openmeerkat/database/client"
+import {
+  type InstagramConversationStarter,
+  type InstagramPersistentMenu,
+  instagramPersistentMenuTypes,
+} from "@openmeerkat/database/partials"
+import {
+  flowVersionModel,
+  integrationInstagramModel,
+} from "@openmeerkat/database/schema"
+import type {
+  IntegrationInstagramModel,
+  WorkspaceModel,
+} from "@openmeerkat/database/types"
+import { encodeButtonPayload } from "@openmeerkat/flow-config"
+import {
+  type IceBreaker,
+  type InstagramAuthValue,
+  type InstagramButton,
+  type InstagramProfileRequest,
+  integration as integrationInstagram,
+} from "@openmeerkat/integration-instagram"
+import {
+  type WorkspaceIdAndIdRequestParams,
+  workspaceIdAndIdRequestParams,
+} from "@/features/common/schemas"
+import { getBrandingUrl } from "@/features/integration-webchat/lib"
+import { workspaceActionClient } from "@/lib/safe-action"
+import { findIntegrationInstagram } from "../queries"
+import {
+  type UpdateInstagramRequest,
+  updateInstagramRequest,
+} from "../schemas/action"
+
+export const updateInstagramAction = workspaceActionClient
+  .bindArgsSchemas(workspaceIdAndIdRequestParams)
+  .inputSchema(updateInstagramRequest)
+  .action(
+    async ({
+      ctx,
+      parsedInput,
+      bindArgsParsedInputs: [_workspaceId, id],
+    }: {
+      ctx: { workspace: WorkspaceModel }
+      parsedInput: UpdateInstagramRequest
+      bindArgsParsedInputs: WorkspaceIdAndIdRequestParams
+    }) => {
+      try {
+        await db.transaction(async (tx) => {
+          const integrationInstagramData = await findIntegrationInstagram({
+            workspaceId: ctx.workspace.id,
+            id,
+          })
+
+          await tx
+            .update(integrationInstagramModel)
+            .set({
+              welcomeFlowId: parsedInput.welcomeFlowId,
+              conversationStarters: parsedInput.conversationStarters,
+              persistentMenus: parsedInput.persistentMenus,
+            })
+            .where(eq(integrationInstagramModel.id, id))
+
+          if (integrationInstagramData) {
+            const auth = integrationInstagramData.auth as InstagramAuthValue
+            const botContext = await buildContext({
+              workspaceId: ctx.workspace.id,
+              integrationType: "instagram",
+              integration: { ...integrationInstagramData, auth },
+            })
+
+            const fieldsToDelete = getInstagramFieldsToDelete(parsedInput)
+            if (fieldsToDelete.length > 0) {
+              await integrationInstagram.runChannelHandler(
+                "bot",
+                "deleteProfileFields",
+                {
+                  ctx: botContext,
+                  fields: fieldsToDelete,
+                },
+              )
+            }
+
+            const profileData: Partial<InstagramProfileRequest> = {}
+
+            if (parsedInput.conversationStarters.length) {
+              profileData.ice_breakers = await buildIceBreakersParams(
+                parsedInput.conversationStarters,
+              )
+            }
+
+            if (parsedInput.persistentMenus.length) {
+              profileData.persistent_menu = await buildPersistentMenuParams(
+                parsedInput.persistentMenus,
+                botContext.platform.appUrl,
+              )
+            }
+
+            if (Object.keys(profileData).length > 0) {
+              await integrationInstagram.runChannelHandler(
+                "bot",
+                "updateProfile",
+                {
+                  ctx: botContext,
+                  data: profileData as InstagramProfileRequest,
+                },
+              )
+            }
+          }
+        })
+      } catch {
+        throw new OpenMeerkatException("Failed to update Instagram integration")
+      }
+    },
+  )
+
+const getInstagramFieldsToDelete = (
+  input: Pick<
+    UpdateInstagramRequest,
+    "conversationStarters" | "persistentMenus"
+  >,
+): string[] => {
+  const fields: string[] = []
+  if (!input.conversationStarters.length) {
+    fields.push("ICE_BREAKERS")
+  }
+  if (!input.persistentMenus.length) {
+    fields.push("PERSISTENT_MENU")
+  }
+  return fields
+}
+
+const buildIceBreakersParams = async (
+  conversationStarters: InstagramConversationStarter[],
+): Promise<IceBreaker[]> => {
+  const callToActions = await Promise.all(
+    conversationStarters.map(async (item) => {
+      const flowVersion = await findOrFail({
+        table: flowVersionModel,
+        where: {
+          flowId: item.flowId,
+          isLatest: true,
+        },
+      })
+      return {
+        question: item.question,
+        payload: encodeButtonPayload({
+          flowId: item.flowId,
+          flowVersionId: flowVersion.id,
+          buttonId: "",
+        }),
+      }
+    }),
+  )
+  return [
+    {
+      locale: "default",
+      call_to_actions: callToActions,
+    },
+  ]
+}
+
+const buildPersistentMenuParams = async (
+  persistentMenus: InstagramPersistentMenu[],
+  appUrl: string,
+): Promise<InstagramProfileRequest["persistent_menu"]> => {
+  const brandingUrl = getBrandingUrl("instagram", appUrl)
+  const menus = moveBrandingMenuLast(persistentMenus, brandingUrl)
+  const callToActions = await parseInstagramButtons(menus)
+  return [
+    {
+      locale: "default",
+      call_to_actions: callToActions,
+    },
+  ]
+}
+export const parseInstagramButtons = async (
+  persistentMenus: IntegrationInstagramModel["persistentMenus"],
+): Promise<InstagramButton[]> => {
+  const buttons: InstagramButton[] = []
+  for (const menu of persistentMenus as InstagramPersistentMenu[]) {
+    if (menu.type === instagramPersistentMenuTypes.enum.flow) {
+      const flowVersion = await findOrFail({
+        table: flowVersionModel,
+        where: {
+          flowId: menu.flowId,
+          isLatest: true,
+        },
+      })
+      buttons.push({
+        type: "postback",
+        title: menu.label,
+        payload: encodeButtonPayload({
+          flowId: menu.flowId,
+          flowVersionId: flowVersion.id,
+          buttonId: "",
+        }),
+      })
+    } else if (
+      menu &&
+      menu.type === instagramPersistentMenuTypes.enum.url &&
+      "url" in menu
+    ) {
+      buttons.push({
+        type: "web_url",
+        title: menu.label,
+        url: menu.url,
+      })
+    }
+  }
+  return buttons
+}

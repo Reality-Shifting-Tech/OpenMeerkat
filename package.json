@@ -1,0 +1,67 @@
+{
+  "name": "openmeerkat",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Reality-Shifting-Tech/OpenMeerkat"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "fix": "ultracite fix --unsafe",
+    "lint": "pnpm check:agent-instructions && ultracite check",
+    "sync:agent-instructions": "node scripts/sync-agent-instructions.mjs --write",
+    "check:agent-instructions": "node scripts/sync-agent-instructions.mjs --check",
+    "test": "turbo run test",
+    "test:watch": "vitest",
+    "test:coverage": "turbo run test -- --coverage",
+    "clean": "pnpm store prune && pnpm dlx rimraf --glob '**/{node_modules,.next,.turbo}'",
+    "check:circular": "pnpm dlx madge --circular --extensions ts,tsx --exclude generated {apps/**/src,packages/**/src}",
+    "check:unused": "knip"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "^24.10.4",
+    "dependency-cruiser": "^17.3.10",
+    "knip": "^6.25.0",
+    "lefthook": "^2.1.6",
+    "tsx": "^4.23.0",
+    "turbo": "^2.10.4",
+    "typescript": "^5",
+    "ultracite": "7.8.3",
+    "vitest": "^4.1.0",
+    "zod": "^4.3.6"
+  },
+  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8",
+  "engines": {
+    "node": ">=24"
+  },
+  "overrides": {
+    "@types/node": "$@types/node",
+    "typescript": "^5",
+    "zod": "^4.3.6",
+    "@codemirror/state": "6.7.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "pnpm": {
+    "overrides": {
+      "typescript": "^5",
+      "@types/node": "24.x",
+      "kysely": "0.28.17",
+      "zod": "^4.3.6",
+      "miniflare>zod": "^3.22.3",
+      "google-auth-library": "^10.7.0",
+      "@codemirror/state": "6.7.0"
+    },
+    "updateConfig": {
+      "ignoreDependencies": [
+        "@types/node",
+        "typescript"
+      ]
+    }
+  }
+}

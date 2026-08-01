@@ -1,0 +1,43 @@
+import type { Node } from "@xyflow/react"
+import { z } from "zod"
+import { addNotesNodeSchema } from "./add-notes"
+import { type NodeType, nodeTypeSchema } from "./base"
+import { conditionNodeSchema } from "./condition"
+import { followUpNodeSchema } from "./follow-up"
+import { landingPageNodeSchema } from "./landing-page"
+import { performActionNodeSchema } from "./perform-action"
+import { sendMailNodeSchema } from "./send-mail"
+import { sendMessageNodeSchema } from "./send-message"
+import { splitTrafficNodeSchema } from "./split-traffic"
+import { startFlowNodeSchema } from "./start-flow"
+import { waitNodeSchema } from "./wait"
+
+export const flowVersionSchema = z.union([
+  sendMessageNodeSchema,
+  startFlowNodeSchema,
+  performActionNodeSchema,
+  conditionNodeSchema,
+  splitTrafficNodeSchema,
+  waitNodeSchema,
+  followUpNodeSchema,
+  addNotesNodeSchema,
+  landingPageNodeSchema,
+  sendMailNodeSchema,
+])
+export type FlowVersionSchema = z.infer<typeof flowVersionSchema>
+
+export const edgeSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  sourceHandle: z.string(),
+  target: z.string(),
+  targetHandle: z.string(),
+})
+export type EdgeSchema = z.infer<typeof edgeSchema>
+
+export type FlowNode = Node<FlowVersionSchema["data"]>
+
+export const disabledContinueNodeTypes = [
+  nodeTypeSchema.enum.splitTraffic,
+  nodeTypeSchema.enum.condition,
+] as NodeType[]

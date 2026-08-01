@@ -1,0 +1,71 @@
+import type { IntegrationWhatsappResource } from "@openmeerkat/business"
+import { db, eq, findOrFail } from "@openmeerkat/database/client"
+import { integrationWhatsappModel } from "@openmeerkat/database/schema"
+import type {
+  InboxModel,
+  IntegrationWhatsappModel,
+} from "@openmeerkat/database/types"
+import type { WhatsappAuthValue } from "@openmeerkat/integration-whatsapp"
+import type { PaginatedResponse } from "@/features/common/schemas/pagination"
+
+type IntegrationWhatsappWithInbox = IntegrationWhatsappResource & {
+  inbox?: Pick<InboxModel, "id" | "name">
+}
+
+export const listIntegrationWhatsapps = async (
+  props: Pick<IntegrationWhatsappModel, "workspaceId">,
+): Promise<PaginatedResponse<IntegrationWhatsappWithInbox>> => {
+  const data = await db.query.integrationWhatsappModel.findMany({
+    where: props,
+    orderBy: {
+      createdAt: "asc",
+    },
+    with: {
+      inbox: {
+        columns: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  })
+
+  return { data, pageCount: 1 }
+}
+
+export const findIntegrationWhatsapp = async (
+  props: Pick<IntegrationWhatsappModel, "workspaceId" | "id">,
+): Promise<IntegrationWhatsappModel> =>
+  await findOrFail({
+    table: integrationWhatsappModel,
+    where: props,
+    message: "Whatsapp integration not found",
+  })
+
+export const findIntegrationWhatsappById = async (
+  id: IntegrationWhatsappModel["id"],
+): Promise<IntegrationWhatsappModel | null> => {
+  const integration = await db.query.integrationWhatsappModel.findFirst({
+    where: { id },
+  })
+
+  return integration ?? null
+}
+
+export const markWhatsappWebhookVerified = async (
+  id: IntegrationWhatsappModel["id"],
+  current: WhatsappAuthValue,
+): Promise<void> => {
+  const updatedAuth: WhatsappAuthValue = {
+    ...current,
+    metadata: {
+      ...current.metadata,
+      webhookVerifiedAt: new Date().toISOString(),
+    },
+  }
+
+  await db
+    .update(integrationWhatsappModel)
+    .set({ auth: updatedAuth })
+    .where(eq(integrationWhatsappModel.id, id))
+}

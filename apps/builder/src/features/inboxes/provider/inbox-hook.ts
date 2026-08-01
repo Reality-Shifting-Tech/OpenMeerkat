@@ -1,0 +1,152 @@
+import { channelTypes } from "@openmeerkat/database/partials"
+import type { SelectOption } from "@openmeerkat/ui/components/form/select-field"
+import { useEffect, useMemo, useState } from "react"
+import { useInboxStore } from "./inbox-store-context"
+
+export const allInboxConfigs = {
+  omnichannel: {
+    label: "Omnichannel",
+    value: "omnichannel",
+  },
+  messenger: {
+    label: "Messenger",
+    value: "messenger",
+  },
+  instagram: {
+    label: "Instagram",
+    value: "instagram",
+  },
+  whatsapp: {
+    label: "Whatsapp",
+    value: "whatsapp",
+  },
+  zalo: {
+    label: "Zalo OA",
+    value: "zalo",
+  },
+  telegram: {
+    label: "Telegram",
+    value: "telegram",
+  },
+  tiktok: {
+    label: "TikTok",
+    value: "tiktok",
+  },
+  webchat: {
+    label: "Webchat",
+    value: "webchat",
+  },
+} as const
+
+export const useConfiguredInboxTypeOptions = () => {
+  const [inboxTypes, setInboxTypes] = useState<string[]>([])
+  const inboxes = useInboxStore((state) => state.inboxes)
+
+  useEffect(() => {
+    const setOfInboxTypes = new Set<string>(["omnichannel"])
+    for (const inbox of inboxes) {
+      // Ignore SMTP inbox type
+      if (inbox.channel !== channelTypes.enum.smtp) {
+        setOfInboxTypes.add(inbox.channel)
+      }
+    }
+    setInboxTypes(Array.from(setOfInboxTypes))
+  }, [inboxes])
+
+  return useMemo(
+    () =>
+      inboxTypes
+        .filter((inboxType) => inboxType in allInboxConfigs)
+        .map(
+          (inboxType) =>
+            allInboxConfigs[inboxType as keyof typeof allInboxConfigs],
+        ),
+    [inboxTypes],
+  )
+}
+
+export const useInboxOptionsByChannel = (
+  channel?: string,
+  excludeChannels: string[] = [channelTypes.enum.smtp],
+): SelectOption[] => {
+  const inboxes = useInboxStore((state) => state.inboxes)
+
+  return useMemo(
+    () =>
+      inboxes
+        .filter((inbox) =>
+          !channel || channel === channelTypes.enum.omnichannel
+            ? !excludeChannels.includes(inbox.channel)
+            : inbox.channel === channel,
+        )
+        .map((inbox) => ({
+          label: inbox.name,
+          value: inbox.id,
+        })),
+    [inboxes, channel, excludeChannels],
+  )
+}
+
+export const useWhatsappInboxOptions = (): SelectOption[] => {
+  const inboxes = useInboxStore((state) => state.inboxes)
+
+  return useMemo(
+    () =>
+      inboxes
+        .filter((inbox) => inbox.channel === channelTypes.enum.whatsapp)
+        .map((inbox) => ({
+          label: inbox.name,
+          value: inbox.id,
+        })),
+    [inboxes],
+  )
+}
+
+export const useMessengerInboxOptions = (): SelectOption[] => {
+  const inboxes = useInboxStore((state) => state.inboxes)
+
+  return useMemo(
+    () =>
+      inboxes
+        .filter((inbox) => inbox.channel === channelTypes.enum.messenger)
+        .map((inbox) => ({
+          label: inbox.name,
+          value: inbox.id,
+        })),
+    [inboxes],
+  )
+}
+
+export const useSmtpInboxOptions = (): SelectOption[] => {
+  const inboxes = useInboxStore((state) => state.inboxes)
+
+  return useMemo(
+    () =>
+      inboxes
+        .filter(
+          (inbox) =>
+            inbox.channel === channelTypes.enum.smtp && !!inbox.integrationSmtp,
+        )
+        .map((inbox) => ({
+          label: inbox.name,
+          value: inbox.integrationSmtp?.id ?? "-",
+        })),
+    [inboxes],
+  )
+}
+
+export const useSmtpInboxFromAddressMap = (): Record<string, string> => {
+  const inboxes = useInboxStore((state) => state.inboxes)
+
+  return useMemo(
+    () =>
+      Object.fromEntries(
+        inboxes.flatMap((inbox) =>
+          inbox.channel === channelTypes.enum.smtp && inbox.integrationSmtp
+            ? [[inbox.integrationSmtp.id, inbox.integrationSmtp.fromAddress]]
+            : [],
+        ),
+      ),
+    [inboxes],
+  )
+}

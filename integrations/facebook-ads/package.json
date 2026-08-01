@@ -1,0 +1,30 @@
+{
+  "name": "@openmeerkat/integration-facebook-ads",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "ky": "^2.0.2",
+    "libphonenumber-js": "^1.12.42",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "^24.10.4",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./apis/*": "./src/apis/*.ts",
+    "./schemas": "./src/schemas.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

@@ -1,0 +1,33 @@
+"use server"
+
+import { platformCredentialService } from "@openmeerkat/business"
+import {
+  type WhatsappCredential,
+  whatsappCredentialUpdateSchema,
+} from "@openmeerkat/database/partials"
+import { authActionClient } from "@/lib/safe-action"
+import { credentialScopeSchema, resolveCredentialScopedUserId } from "../scope"
+
+export const updateWhatsappSettingsAction = authActionClient
+  .bindArgsSchemas([credentialScopeSchema])
+  .inputSchema(whatsappCredentialUpdateSchema)
+  .action(async ({ ctx, bindArgsParsedInputs: [scope], parsedInput }) => {
+    const scopedUserId = resolveCredentialScopedUserId(ctx.user, scope)
+    const config: WhatsappCredential = {
+      clientId: parsedInput.clientId,
+      version: parsedInput.version,
+      configId: parsedInput.configId,
+      systemUserId: parsedInput.systemUserId,
+      businessId: parsedInput.businessId,
+      businessName: parsedInput.businessName,
+      verifyToken: parsedInput.verifyToken,
+      clientSecret: parsedInput.clientSecret,
+      systemUserToken: parsedInput.systemUserToken,
+    }
+
+    await platformCredentialService.upsert({
+      userId: scopedUserId,
+      type: "whatsapp",
+      config,
+    })
+  })

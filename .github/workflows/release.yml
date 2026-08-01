@@ -1,0 +1,171 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  BUILD_PLATFORMS: linux/amd64 #,linux/arm64
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  prepare-metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      labels: ${{ steps.meta.outputs.labels }}
+      image_namespace: ${{ steps.image_namespace.outputs.owner_lc }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set image namespace (GHCR requires lowercase)
+        id: image_namespace
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.DOCKER_REGISTRY }}/${{ steps.image_namespace.outputs.owner_lc }}/openmeerkat-builder
+            ${{ env.DOCKER_REGISTRY }}/${{ steps.image_namespace.outputs.owner_lc }}/openmeerkat-worker
+            ${{ env.DOCKER_REGISTRY }}/${{ steps.image_namespace.outputs.owner_lc }}/openmeerkat-realtime
+            ${{ env.DOCKER_REGISTRY }}/${{ steps.image_namespace.outputs.owner_lc }}/openmeerkat-mcp
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+
+  build-image:
+    name: Build ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    needs: prepare-metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: builder
+            image: openmeerkat-builder
+            dockerfile: ./apps/builder/docker/Dockerfile
+          - label: worker
+            image: openmeerkat-worker
+            dockerfile: ./apps/worker/docker/Dockerfile
+          - label: realtime
+            image: openmeerkat-realtime
+            dockerfile: ./apps/realtime/docker/Dockerfile
+          - label: mcp-server
+            image: openmeerkat-mcp
+            dockerfile: ./apps/mcp-server/docker/Dockerfile
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push main image
+        if: github.event_name != 'pull_request' && github.ref_name == 'main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ needs.prepare-metadata.outputs.image_namespace }}/${{ matrix.image }}:main
+          labels: ${{ needs.prepare-metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: ${{ env.BUILD_PLATFORMS }}
+
+      - name: Build and push version image
+        if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ needs.prepare-metadata.outputs.image_namespace }}/${{ matrix.image }}:${{ needs.prepare-metadata.outputs.version }}
+            ${{ env.DOCKER_REGISTRY }}/${{ needs.prepare-metadata.outputs.image_namespace }}/${{ matrix.image }}:latest
+          labels: ${{ needs.prepare-metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: ${{ env.BUILD_PLATFORMS }}
+
+      - name: Build image for pull request
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          labels: ${{ needs.prepare-metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: ${{ env.BUILD_PLATFORMS }}
+
+  output-image-urls:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare-metadata
+      - build-image
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - name: Output image URLs
+        run: |
+          VERSION="${{ needs.prepare-metadata.outputs.version }}"
+          REGISTRY="${{ env.DOCKER_REGISTRY }}/${{ needs.prepare-metadata.outputs.image_namespace }}"
+          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "ghcr" ]]; then
+            printf '%s\n' \
+              "Builder image (main): ${REGISTRY}/openmeerkat-builder:main" \
+              "Worker image (main): ${REGISTRY}/openmeerkat-worker:main" \
+              "Realtime image (main): ${REGISTRY}/openmeerkat-realtime:main" \
+              "MCP Server image (main): ${REGISTRY}/openmeerkat-mcp:main"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            printf '%s\n' \
+              "Builder image (version): ${REGISTRY}/openmeerkat-builder:${VERSION}" \
+              "Builder image (latest): ${REGISTRY}/openmeerkat-builder:latest" \
+              "Worker image (version): ${REGISTRY}/openmeerkat-worker:${VERSION}" \
+              "Worker image (latest): ${REGISTRY}/openmeerkat-worker:latest" \
+              "Realtime image (version): ${REGISTRY}/openmeerkat-realtime:${VERSION}" \
+              "Realtime image (latest): ${REGISTRY}/openmeerkat-realtime:latest" \
+              "MCP Server image (version): ${REGISTRY}/openmeerkat-mcp:${VERSION}" \
+              "MCP Server image (latest): ${REGISTRY}/openmeerkat-mcp:latest"
+          else
+            echo "No publish tags for ref ${GITHUB_REF}."
+          fi

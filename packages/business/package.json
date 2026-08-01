@@ -1,0 +1,58 @@
+{
+  "name": "@openmeerkat/business",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./branding": "./src/platform/branding.ts",
+    "./contact-custom-field": "./src/contact-custom-field/index.ts",
+    "./contact-custom-field-value": "./src/contact-custom-field/value-service.ts",
+    "./contact-inbox": "./src/contact-inbox/index.ts",
+    "./contact-locale": "./src/contact-locale/index.ts",
+    "./contact-sequence": "./src/contact-sequence/index.ts",
+    "./coupon": "./src/coupon/index.ts",
+    "./get-user-data": "./src/get-user-data/index.ts",
+    "./smart-delay": "./src/smart-delay/index.ts",
+    "./errors": "./src/errors.ts",
+    "./referral": "./src/referral/index.ts",
+    "./system-field": "./src/system-field/index.ts",
+    "./utils": "./src/utils.ts",
+    "./workspace-lifecycle/predicates": "./src/workspace-lifecycle/predicates.ts"
+  },
+  "dependencies": {
+    "@openmeerkat/analytics": "workspace:*",
+    "@openmeerkat/database": "workspace:*",
+    "@openmeerkat/encryption": "workspace:*",
+    "@openmeerkat/event-bus": "workspace:*",
+    "@openmeerkat/events": "workspace:*",
+    "@openmeerkat/filesystem": "workspace:*",
+    "@openmeerkat/flow-config": "workspace:*",
+    "@openmeerkat/imports": "workspace:*",
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/partysocket-config": "workspace:*",
+    "@openmeerkat/redis": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "@openmeerkat/sequence-scheduler": "workspace:*",
+    "@openmeerkat/utils": "workspace:*",
+    "@openmeerkat/worker-config": "workspace:*",
+    "@t3-oss/env-core": "^0.13.11",
+    "date-fns-tz": "^3.2.0",
+    "dot-prop": "^10.1.0",
+    "drizzle-orm": "1.0.0-beta.22",
+    "jose": "^6.2.3",
+    "libphonenumber-js": "^1.12.42",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "^24.10.4",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

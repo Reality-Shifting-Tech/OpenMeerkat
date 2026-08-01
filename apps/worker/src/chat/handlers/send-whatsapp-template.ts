@@ -1,0 +1,347 @@
+import {
+  broadcastToWorkspaceParty,
+  contactInboxService,
+} from "@openmeerkat/business"
+import { db, eq } from "@openmeerkat/database/client"
+import { createMessageRepository } from "@openmeerkat/database/repositories"
+import {
+  conversationModel,
+  type messageModel,
+} from "@openmeerkat/database/schema"
+import type {
+  ContactInboxModel,
+  ConversationModel,
+} from "@openmeerkat/database/types"
+import { emit } from "@openmeerkat/event-bus"
+import type { MetadataPayload } from "@openmeerkat/flow-config"
+import {
+  extractTemplateParams,
+  messageEventTypeSchema,
+  type SendWaTemplateMessageStepSchema,
+  stepTypes,
+  type TemplateComponent,
+} from "@openmeerkat/flow-config"
+import { RealtimeEventType } from "@openmeerkat/partysocket-config"
+import { type MessageTemplateEntity, parseSdkError } from "@openmeerkat/sdk"
+import { createId } from "@openmeerkat/utils"
+import { contactVariableService } from "@openmeerkat/variables"
+import type {
+  BotResponseTrackingContext,
+  ChatJobSendWhatsappTemplateMessage,
+} from "@openmeerkat/worker-config"
+import {
+  replaceWhatsappTemplateVariables,
+  validateWhatsappTemplate,
+} from "../../integration/handlers/wa-template-handler"
+import { logger } from "../../lib/logger"
+import { shouldSuppressRetryableChannelError } from "../utils/retry"
+import { convertButtonsToTemplate } from "./send-flow-step"
+import { sendFlowStepToChannel } from "./send-message"
+
+export interface ProcessWhatsappTemplateParams {
+  broadcastId?: string
+  contactInbox: ContactInboxModel
+  conversation: ConversationModel
+  flow?: {
+    id: string
+    versionId?: string
+    buttons: SendWaTemplateMessageStepSchema["buttons"]
+  }
+  metadata?: MetadataPayload
+  step?: SendWaTemplateMessageStepSchema
+  template: SendWaTemplateMessageStepSchema["template"]
+  trackingContext?: BotResponseTrackingContext
+}
+
+export interface ProcessWhatsappTemplateResult {
+  message: typeof messageModel.$inferSelect
+  messageId: string
+  providerMessageId?: string
+}
+
+export async function processWhatsappTemplate(
+  params: ProcessWhatsappTemplateParams,
+): Promise<ProcessWhatsappTemplateResult> {
+  const {
+    conversation,
+    contactInbox,
+    template,
+    broadcastId,
+    flow,
+    step,
+    trackingContext,
+    metadata,
+  } = params
+
+  const eventLogData = {
+    context: {
+      workspaceId: conversation.workspaceId,
+      contactId: conversation.contactId,
+      conversationId: conversation.id,
+      channel: contactInbox.channel,
+      contactInboxId: contactInbox.id,
+      inboxId: contactInbox.inboxId,
+    },
+    action: {
+      flowId: flow?.id || "",
+      flowVersionId: flow?.versionId || "",
+    },
+    stepId: step?.id || "",
+    nodeId: step?.nodeId || "",
+    metadata,
+  }
+
+  let newMessage: typeof messageModel.$inferSelect | null = null
+
+  try {
+    const validated = await validateWhatsappTemplate(
+      template.id,
+      contactInbox.inboxId,
+    )
+    if (!validated) {
+      logger.error(
+        { templateId: template.id, inboxId: contactInbox.inboxId },
+        "Template validation failed - not approved or not found",
+      )
+      throw new Error(`Template validation failed: ${template.id}`)
+    }
+
+    const variables = await contactVariableService.getAll({
+      contactId: conversation.contactId,
+      contactInbox,
+      conversation,
+    })
+    const replacedParams = await replaceWhatsappTemplateVariables({
+      templateParams: template.params,
+      variables,
+    })
+
+    const contentAttributes = {
+      type: "whatsapp_template",
+      template: {
+        name: template.name,
+        language: template.language,
+        id: template.id,
+        params: replacedParams,
+      },
+      stepId: step?.id,
+      nodeId: step?.nodeId,
+      ...(broadcastId && { broadcastId }),
+      ...(flow && { flowId: flow.id }),
+      ...(flow && { flowVersionId: flow.versionId }),
+      ...(trackingContext && { trackingContext }),
+      payload: {} as MessageTemplateEntity["payload"],
+      metadata,
+    }
+
+    if (flow?.buttons && flow.buttons.length > 0) {
+      contentAttributes.payload = {
+        templateType: "button",
+        buttons: convertButtonsToTemplate({
+          flowId: flow.id,
+          flowVersionId: flow.versionId,
+          buttons: flow.buttons,
+          contactInboxId: contactInbox.id,
+        }),
+      }
+    }
+
+    const repository = await createMessageRepository()
+    newMessage = await repository.create({
+      contactInboxId: contactInbox.id,
+      workspaceId: conversation.workspaceId,
+      conversationId: conversation.id,
+      messageType: "outgoing",
+      contentType: "text",
+      senderType: "bot",
+      sourceId: null,
+      text: `Template: ${template.name}`,
+      contentAttributes,
+      createdAt: new Date(),
+    })
+
+    if (!newMessage) {
+      throw new Error("Failed to insert message record")
+    }
+    const createdMessage = newMessage
+
+    const trackingInvalidation = await db.transaction(async (tx) => {
+      const invalidation =
+        await contactInboxService.recordOutboundMessageCreated({
+          tx,
+          contactInboxId: contactInbox.id,
+          contactId: contactInbox.contactId,
+          workspaceId: conversation.workspaceId,
+          at: createdMessage.createdAt,
+        })
+
+      await tx
+        .update(conversationModel)
+        .set({ lastActivityAt: createdMessage.createdAt })
+        .where(eq(conversationModel.id, conversation.id))
+
+      return invalidation
+    })
+    if (trackingInvalidation) {
+      await contactInboxService.invalidateTracking(trackingInvalidation)
+    }
+
+    broadcastToWorkspaceParty(conversation.workspaceId, {
+      eventType: RealtimeEventType.messageCreated,
+      data: newMessage,
+    })
+
+    const result = await sendFlowStepToChannel({
+      conversation,
+      contactInbox,
+      flowId: flow?.id || "",
+      flowVersionId: flow?.versionId || "",
+      step: {
+        id: step?.id ?? createId(),
+        nodeId: step?.nodeId ?? createId(),
+        stepType: stepTypes.enum.sendWaTemplateMessage,
+        buttons: [],
+        template,
+      },
+      metadata,
+      messageId: newMessage.id,
+    })
+
+    await emit(messageEventTypeSchema.enum["message:sent"], {
+      ...eventLogData,
+      action: { messageId: "", flowId: flow?.id || "" },
+      occurredAt: new Date(),
+    })
+
+    const providerMessageId = result?.messageIds?.[0]
+
+    if (providerMessageId) {
+      try {
+        await repository.updateSourceId(
+          newMessage.id,
+          providerMessageId,
+          conversation.workspaceId,
+          newMessage.createdAt,
+        )
+      } catch (err) {
+        logger.error(
+          err,
+          "Failed to persist WhatsApp template sourceId after a successful send",
+        )
+      }
+    }
+
+    return {
+      messageId: newMessage.id,
+      providerMessageId,
+      message: { ...newMessage, sourceId: providerMessageId || null },
+    }
+  } catch (error) {
+    const errorData = await parseSdkError(error)
+
+    logger.error(
+      {
+        error,
+        messageId: newMessage?.id,
+        conversationId: conversation.id,
+        templateId: template.id,
+      },
+      "Failed to send WhatsApp template to provider",
+    )
+    await emit(messageEventTypeSchema.enum["message:failed"], {
+      ...eventLogData,
+      action: {
+        messageId: newMessage?.id || "",
+        flowId: flow?.id || "",
+      },
+      errorData,
+      occurredAt: new Date(),
+    })
+
+    throw error
+  }
+}
+
+export async function sendWhatsappTemplateMessage(
+  data: ChatJobSendWhatsappTemplateMessage["data"],
+): Promise<ProcessWhatsappTemplateResult | undefined> {
+  const {
+    conversation,
+    templateId,
+    broadcastId,
+    templateData,
+    contactInbox,
+    metadata,
+  } = data
+
+  const eventLogData = {
+    context: {
+      workspaceId: conversation.workspaceId,
+      contactId: conversation.contactId,
+      conversationId: conversation.id,
+      channel: contactInbox.channel,
+      contactInboxId: contactInbox.id,
+      inboxId: contactInbox.inboxId,
+    },
+    action: {
+      flowId: "",
+    },
+    stepId: "",
+    nodeId: "",
+    metadata,
+  }
+
+  try {
+    const validated = await validateWhatsappTemplate(
+      templateId,
+      contactInbox.inboxId,
+    )
+
+    if (!validated) {
+      const error = new Error(
+        `WhatsApp template not found or not approved: ${templateId}`,
+      )
+      await emit(messageEventTypeSchema.enum["message:failed"], {
+        ...eventLogData,
+        action: { messageId: "", flowId: "" },
+        errorData: await parseSdkError(error),
+        occurredAt: new Date(),
+      })
+      throw error
+    }
+
+    const { template } = validated
+    const templateParams =
+      templateData ??
+      extractTemplateParams((template.components as TemplateComponent[]) || [])
+
+    const result = await processWhatsappTemplate({
+      conversation,
+      contactInbox,
+      template: {
+        id: template.id,
+        name: template.name,
+        language: template.language,
+        params: templateParams,
+      },
+      broadcastId,
+      metadata,
+    })
+
+    return result
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        conversationId: conversation.id,
+        templateId,
+        broadcastId,
+      },
+      "Error sending WhatsApp template message for broadcast",
+    )
+    if (shouldSuppressRetryableChannelError(error, contactInbox.channel)) {
+      return
+    }
+    throw error
+  }
+}

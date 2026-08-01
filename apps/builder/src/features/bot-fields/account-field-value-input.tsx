@@ -1,0 +1,74 @@
+"use client"
+
+import type { CustomFieldType } from "@openmeerkat/database/partials"
+import {
+  DatePickerField,
+  DateTimePickerField,
+} from "@openmeerkat/ui/components/form/date-picker-field"
+import { InputField } from "@openmeerkat/ui/components/form/input-field"
+import { SelectField } from "@openmeerkat/ui/components/form/select-field"
+import { TextareaField } from "@openmeerkat/ui/components/form/textarea-field"
+import { useTranslations } from "next-intl"
+
+type BotFieldValueInputProps = {
+  name?: string
+  type: CustomFieldType
+  saveFormat?: "formatted" | "iso"
+}
+
+export const BotFieldValueInput = ({
+  name = "value",
+  saveFormat = "formatted",
+  type,
+}: BotFieldValueInputProps) => {
+  const t = useTranslations()
+
+  switch (type) {
+    case "number":
+      return (
+        <InputField
+          name={name}
+          placeholder={t("fields.number.placeholder")}
+          type="number"
+        />
+      )
+    case "boolean":
+      return (
+        <SelectField
+          name={name}
+          options={[
+            { label: t("fields.boolean.true"), value: "true" },
+            { label: t("fields.boolean.false"), value: "false" },
+          ]}
+          placeholder={t("fields.boolean.placeholder")}
+        />
+      )
+    case "date": {
+      return <DatePickerField name={name} saveFormat={saveFormat} />
+    }
+    case "datetime": {
+      const dateTimeFormat = "yyyy-MM-dd HH:mm"
+      return (
+        <DateTimePickerField
+          dateTimeFormat={dateTimeFormat}
+          name={name}
+          saveFormat={saveFormat}
+        />
+      )
+    }
+    case "longText":
+      return (
+        <TextareaField
+          name={name}
+          placeholder={t("fields.shortText.placeholder")}
+        />
+      )
+    default:
+      return (
+        <InputField
+          name={name}
+          placeholder={t("fields.shortText.placeholder")}
+        />
+      )
+  }
+}

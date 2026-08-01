@@ -1,0 +1,135 @@
+"use client"
+
+import type { AIAgentModel, WorkspaceModel } from "@openmeerkat/database/types"
+import { DataTable } from "@openmeerkat/ui/components/data-table/data-table"
+import { DataTableToolbar } from "@openmeerkat/ui/components/data-table/data-table-toolbar"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@openmeerkat/ui/components/ui/card"
+import { useDataTable } from "@openmeerkat/ui/hooks/use-data-table"
+import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import { use, useMemo, useState } from "react"
+import { DeleteAIAgentsDialog } from "@/features/ai-agents/delete-ai-agent"
+import type { listAIAgents } from "@/features/ai-agents/queries"
+import { UpdateAIAgentDialog } from "@/features/ai-agents/update-ai-agent"
+import type { listIntegrationOpenaiCompatible } from "@/features/integration-openai-compatible/queries"
+import { BotReplyDelayDialog } from "./components/bot-reply-delay-dialog"
+import { ChangeDefault } from "./components/change-default"
+import { CreateAIAgentDialog } from "./create-ai-agent"
+import {
+  type AIAgentDataTableRowAction,
+  getAIAgentsColumns,
+} from "./table-columns"
+
+type AIAgentsTableProps = {
+  workspaceId: string
+  promises: Promise<
+    [
+      Awaited<ReturnType<typeof listAIAgents>>,
+      Awaited<ReturnType<typeof listIntegrationOpenaiCompatible>>,
+      WorkspaceModel,
+    ]
+  >
+}
+
+export function AIAgentsTable({ workspaceId, promises }: AIAgentsTableProps) {
+  const [{ data, pageCount }, openaiCompatibleIntegrations, workspace] =
+    use(promises)
+
+  const t = useTranslations()
+  const router = useRouter()
+
+  const [rowAction, setRowAction] =
+    useState<AIAgentDataTableRowAction<AIAgentModel> | null>(null)
+
+  const columns = useMemo(
+    () =>
+      getAIAgentsColumns({
+        setRowAction,
+        t,
+      }),
+    [t],
+  )
+
+  const { table } = useDataTable({
+    data,
+    columns,
+    pageCount,
+    initialState: {
+      sorting: [{ id: "createdAt", desc: true }],
+      columnPinning: { right: ["actions"] },
+    },
+    getRowId: (originalRow: AIAgentModel) => originalRow.id,
+    shallow: false,
+    clearOnDefault: true,
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-bold text-xl">{t("aiAgent.name")}</CardTitle>
+        <CardDescription>{t("aiAgent.description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DataTable table={table}>
+          <DataTableToolbar table={table}>
+            <CreateAIAgentDialog
+              onSuccess={() => {
+                router.refresh()
+              }}
+              openaiCompatibleIntegrations={openaiCompatibleIntegrations}
+              workspaceId={workspaceId}
+            />
+          </DataTableToolbar>
+        </DataTable>
+
+        <DeleteAIAgentsDialog
+          agents={rowAction?.row.original ? [rowAction?.row.original] : []}
+          onOpenChange={() => setRowAction(null)}
+          onSuccess={() => {
+            rowAction?.row.toggleSelected(false)
+            router.refresh()
+          }}
+          open={rowAction?.variant === "delete"}
+          showTrigger={false}
+          workspaceId={workspaceId}
+        />
+
+        <UpdateAIAgentDialog
+          agent={rowAction?.row.original || null}
+          onOpenChange={() => setRowAction(null)}
+          onSuccess={() => {
+            router.refresh()
+          }}
+          open={rowAction?.variant === "update"}
+          openaiCompatibleIntegrations={openaiCompatibleIntegrations}
+          workspaceId={workspaceId}
+        />
+
+        <ChangeDefault
+          aiAgent={rowAction?.row.original || null}
+          onOpenChange={() => setRowAction(null)}
+          onSuccess={() => {
+            router.refresh()
+          }}
+          open={rowAction?.variant === "toggleDefault"}
+        />
+
+        <BotReplyDelayDialog
+          onOpenChange={() => setRowAction(null)}
+          onSuccess={() => {
+            router.refresh()
+          }}
+          open={rowAction?.variant === "botReplyDelay"}
+          smartResponseDelaySeconds={workspace.smartResponseDelaySeconds}
+          workspaceId={workspaceId}
+        />
+      </CardContent>
+    </Card>
+  )
+}

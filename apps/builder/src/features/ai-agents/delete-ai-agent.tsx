@@ -1,0 +1,117 @@
+"use client"
+
+import type { AIAgentModel } from "@openmeerkat/database/types"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import type { Row } from "@tanstack/react-table"
+import { Loader, Trash } from "lucide-react"
+import { useTranslations } from "next-intl"
+import { useAction } from "next-safe-action/hooks"
+import type { ComponentPropsWithoutRef } from "react"
+import { toast } from "sonner"
+import { deleteAIAgentAction } from "@/features/ai-agents/actions/delete.action"
+
+type DeleteAIAgentsDialogProps = ComponentPropsWithoutRef<typeof Dialog> & {
+  workspaceId: string
+  agents: Row<AIAgentModel>["original"][]
+  showTrigger?: boolean
+  onSuccess?: () => void
+  onOpenChange: (val: boolean) => void
+}
+
+export function DeleteAIAgentsDialog({
+  workspaceId,
+  agents,
+  showTrigger = true,
+  onSuccess,
+  onOpenChange,
+  ...props
+}: DeleteAIAgentsDialogProps) {
+  const t = useTranslations()
+
+  const { execute, isExecuting } = useAction(
+    deleteAIAgentAction.bind(null, workspaceId),
+    {
+      onSuccess: () => {
+        toast.success(
+          t("messages.deletedSuccess", {
+            feature: t("fields.aiAgent.label"),
+          }),
+        )
+        onOpenChange(false)
+        onSuccess?.()
+      },
+      onError: ({ error }) => {
+        if (error.serverError) {
+          toast.error(error.serverError)
+        }
+      },
+    },
+  )
+
+  return (
+    <Dialog {...props}>
+      {showTrigger ? (
+        <DialogTrigger
+          render={
+            <Button size="sm" variant="outline">
+              <Trash aria-hidden="true" className="me-2 size-4" />
+              {t("actions.delete")} ({agents.length})
+            </Button>
+          }
+        />
+      ) : null}
+      <DialogContent className={"max-h-screen max-w-xl overflow-y-scroll"}>
+        <DialogHeader>
+          <DialogTitle>
+            {t("messages.deleteFeature", {
+              feature: t("fields.aiAgent.label"),
+            })}
+          </DialogTitle>
+          <DialogDescription className="whitespace-pre-wrap text-sm/6">
+            {t("messages.deleteConfirmation", {
+              feature: t("fields.aiAgent.label"),
+            })}
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter className="gap-2 sm:space-x-0">
+          <DialogClose
+            render={
+              <Button
+                onClick={() => onOpenChange(false)}
+                size="sm"
+                variant="ghost"
+              >
+                {t("actions.cancel")}
+              </Button>
+            }
+          />
+          <Button
+            aria-label="Delete selected rows"
+            disabled={isExecuting}
+            onClick={() =>
+              execute({ ids: (agents ?? []).map((agent) => agent.id) })
+            }
+            size="sm"
+            variant="destructive"
+          >
+            {isExecuting && (
+              <Loader aria-hidden="true" className="me-2 size-4 animate-spin" />
+            )}
+            {t("actions.delete")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

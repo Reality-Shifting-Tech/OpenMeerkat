@@ -1,0 +1,33 @@
+{
+  "name": "@openmeerkat/mail",
+  "version": "0.1.0",
+  "type": "module",
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/mjml": "^5.0.0",
+    "@types/mjml-core": "^5.0.0",
+    "@types/node": "^24.10.4",
+    "@types/nodemailer": "^8.0.0",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@t3-oss/env-core": "^0.13.11",
+    "mjml": "^5.2.0",
+    "nodemailer": "^8.0.7",
+    "zod": "^4.3.6"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./preview": "./src/preview.ts",
+    "./transport": "./src/transport.ts",
+    "./dynamic": "./src/dynamic-email.ts",
+    "./keys": "./src/keys.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

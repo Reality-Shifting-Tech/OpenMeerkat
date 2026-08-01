@@ -1,0 +1,50 @@
+import type { FieldPath, FieldValues } from "react-hook-form"
+import { NumberInput, type NumberInputProps } from "../ui/input-number"
+import { FormFieldWrapper } from "./field-wrapper"
+
+type InputNumberFieldProps<T extends FieldValues> = NumberInputProps & {
+  name: FieldPath<T>
+  formItemClassName?: string
+  label?: string
+  required?: boolean
+  description?: string
+  descriptionType?: "inline" | "tooltip"
+  className?: string
+}
+
+export function InputNumberField<T extends FieldValues>({
+  name,
+  label,
+  required,
+  description,
+  descriptionType = "inline",
+  formItemClassName,
+  prefix,
+  suffix,
+  className,
+  ...props
+}: InputNumberFieldProps<T>) {
+  return (
+    <FormFieldWrapper
+      description={description}
+      descriptionType={descriptionType}
+      formItemClassName={formItemClassName}
+      label={label}
+      name={name}
+      required={required}
+    >
+      {(field) => (
+        <div className="flex items-center gap-2">
+          {prefix && <span className="text-muted-foreground">{prefix}</span>}
+          <NumberInput
+            {...props}
+            onBlur={field.onBlur}
+            onValueChange={field.onChange}
+            value={field.value}
+          />
+          {suffix && <span className="text-muted-foreground">{suffix}</span>}
+        </div>
+      )}
+    </FormFieldWrapper>
+  )
+}

@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (zero warnings)
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Upload debug artifact on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-debug-${{ github.sha }}
+          path: |
+            .turbo
+            **/.next
+            coverage
+          if-no-files-found: ignore
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start postgres and redis
+        run: docker compose up -d postgres redis --wait
+
+      - name: Verify services are healthy
+        run: |
+          docker compose exec -T postgres pg_isready -U openmeerkat
+          docker compose exec -T redis redis-cli ping | grep -q PONG
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

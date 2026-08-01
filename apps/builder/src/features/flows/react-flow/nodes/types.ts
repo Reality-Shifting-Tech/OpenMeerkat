@@ -1,0 +1,37 @@
+import type { ListInboxesResponse } from "@openmeerkat/business"
+import type {
+  ChooseChannelStepSchema,
+  StepType,
+} from "@openmeerkat/flow-config"
+import type { LucideIcon } from "lucide-react"
+import type { useTranslations } from "next-intl"
+import type { FlowMessengerTemplateResource } from "@/features/integration-messenger/message-templates/schema/resource"
+import type { WhatsappFlowResource } from "@/features/integration-whatsapp/flows/schema/resource"
+import type { FlowTemplateResource } from "@/features/integration-whatsapp/message-templates/schema/resource"
+
+export type MenuItem = {
+  label: string
+  icon: LucideIcon | React.FC<{ className?: string; fill?: string }>
+  stepType: StepType | null
+  children?: MenuItem[]
+  // biome-ignore lint/suspicious/noExplicitAny: save additional props for onAdd
+  props?: Record<string, any>
+}
+
+export type TranslationFn = ReturnType<typeof useTranslations>
+
+export type FlowTemplateMenuData = {
+  waTemplates?: FlowTemplateResource[]
+  messengerTemplates?: FlowMessengerTemplateResource[]
+}
+
+export type FlowMenuData = {
+  waFlows?: WhatsappFlowResource[]
+}
+
+export type MenuData = {
+  inboxes: ListInboxesResponse["data"]
+  templates: FlowTemplateMenuData
+  flows: FlowMenuData
+  beforeStep: ChooseChannelStepSchema
+}

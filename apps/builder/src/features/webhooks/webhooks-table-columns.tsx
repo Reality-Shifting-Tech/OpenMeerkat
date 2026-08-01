@@ -1,0 +1,198 @@
+"use client"
+
+import { DataTableColumnHeader } from "@openmeerkat/ui/components/data-table/data-table-column-header"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import { Checkbox } from "@openmeerkat/ui/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@openmeerkat/ui/components/ui/dropdown-menu"
+import { Switch } from "@openmeerkat/ui/components/ui/switch"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@openmeerkat/ui/components/ui/tooltip"
+import type { DataTableRowAction } from "@openmeerkat/ui/types/data-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import {
+  FolderUpIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  TextIcon,
+  Trash2Icon,
+} from "lucide-react"
+import Link from "next/link"
+import type { useTranslations } from "next-intl"
+import { useAction } from "next-safe-action/hooks"
+import type { Dispatch, SetStateAction } from "react"
+import { updateWebhookSettingsAction } from "./actions/update-webhook-settings-action"
+import type { WebhookResource } from "./schemas"
+
+type GetColumnsProps = {
+  workspaceId: string
+  t: ReturnType<typeof useTranslations>
+  setRowAction: Dispatch<
+    SetStateAction<DataTableRowAction<WebhookResource> | null>
+  >
+}
+
+export function getColumns({
+  workspaceId,
+  t,
+  setRowAction,
+}: GetColumnsProps): ColumnDef<WebhookResource>[] {
+  return [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          aria-label={t("actions.selectAll")}
+          checked={table.getIsAllPageRowsSelected()}
+          className="translate-y-0.5"
+          indeterminate={table.getIsSomePageRowsSelected()}
+          onCheckedChange={(value) =>
+            table.toggleAllPageRowsSelected(Boolean(value))
+          }
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={t("actions.selectRow")}
+          checked={row.getIsSelected()}
+          className="translate-y-0.5"
+          onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+        />
+      ),
+      size: 20,
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: "name",
+      accessorKey: "name",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t("fields.name.label")} />
+      ),
+      cell: ({ row }) => (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="max-w-[400px] truncate">
+                <Link
+                  href={`/space/${workspaceId}/webhooks/${row.original.id}/edit`}
+                >
+                  <div className="max-w-[400px] truncate">
+                    {row.original.name}
+                  </div>
+                </Link>
+              </div>
+            }
+          />
+          <TooltipContent>
+            <p>{row.original.name}</p>
+          </TooltipContent>
+        </Tooltip>
+      ),
+      size: 400,
+      meta: {
+        label: t("fields.name.label"),
+        placeholder: t("fields.name.placeholder"),
+        variant: "text",
+      },
+      enableColumnFilter: true,
+      enableSorting: true,
+    },
+    {
+      id: "status",
+      accessorKey: "status",
+      header: ({ column }) => (
+        <DataTableColumnHeader
+          column={column}
+          title={t("fields.status.label")}
+        />
+      ),
+      cell: ({ row }) => {
+        const { execute, isPending } = useAction(
+          updateWebhookSettingsAction.bind(
+            null,
+            row.original.workspaceId,
+            row.original.id,
+          ),
+          {
+            onSuccess: () => {
+              row.original.active = !row.original.active
+            },
+          },
+        )
+        return (
+          <Switch
+            checked={row.original.active}
+            disabled={isPending}
+            onCheckedChange={(value) => {
+              execute({ active: value })
+            }}
+          />
+        )
+      },
+      meta: {
+        label: t("fields.status.label"),
+      },
+      size: 30,
+      enableSorting: true,
+    },
+
+    {
+      id: "action",
+      size: 10,
+      header: "Actions",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button size="icon" variant="ghost">
+                <MoreHorizontalIcon className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              render={
+                <Link
+                  href={`/space/${workspaceId}/webhooks/${row.original.id}/edit`}
+                >
+                  <PencilIcon />
+                  {t("actions.edit")}
+                </Link>
+              }
+            />
+            <DropdownMenuItem
+              onClick={() => setRowAction({ row, variant: "rename" })}
+            >
+              <TextIcon />
+              {t("actions.rename")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setRowAction({ row, variant: "move" })}
+            >
+              <FolderUpIcon />
+              {t("actions.move")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setRowAction({ row, variant: "delete" })}
+              variant="destructive"
+            >
+              <Trash2Icon />
+              {t("actions.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+  ]
+}

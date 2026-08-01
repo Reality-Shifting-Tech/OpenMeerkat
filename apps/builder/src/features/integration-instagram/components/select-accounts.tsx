@@ -1,0 +1,33 @@
+"use client"
+
+import type { InstagramAccount } from "@openmeerkat/integration-instagram"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@openmeerkat/ui/components/ui/card"
+import { useTranslations } from "next-intl"
+import { InstagramAccounts } from "@/features/integration-instagram/components/instagram-accounts"
+
+export type SelectAccountProps = {
+  account: InstagramAccount
+  workspaceId: string
+}
+
+export function SelectAccount({ account, workspaceId }: SelectAccountProps) {
+  const t = useTranslations()
+
+  return (
+    <Card className="mx-auto mt-40 max-w-md">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>
+          {t("actions.connectFeature", { feature: "Instagram" })}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <InstagramAccounts account={account} workspaceId={workspaceId} />
+      </CardContent>
+    </Card>
+  )
+}

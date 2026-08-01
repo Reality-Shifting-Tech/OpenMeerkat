@@ -1,0 +1,63 @@
+"use server"
+
+import {
+  aiMcpServerService,
+  type UpdateAIMcpServerRequest,
+} from "@openmeerkat/business"
+import { notFoundException } from "@openmeerkat/business/errors"
+import { zodBigintAsString } from "@openmeerkat/utils"
+import { getTranslations } from "next-intl/server"
+import { returnValidationErrors } from "next-safe-action"
+import { workspaceActionClient } from "@/lib/safe-action"
+import { updateAIMcpServerRequest } from "../schemas/action"
+
+export const updateAIMcpServerAction = workspaceActionClient
+  .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
+  .inputSchema(updateAIMcpServerRequest)
+  .action(async (props) => {
+    const {
+      bindArgsParsedInputs: [workspaceId, id],
+      parsedInput,
+    } = props
+
+    return await updateAIMcpServer({ workspaceId, id }, parsedInput)
+  })
+
+export const updateAIMcpServer = async (
+  ctx: { workspaceId: string; id: string },
+  parsedInput: UpdateAIMcpServerRequest,
+) => {
+  const t = await getTranslations()
+
+  const mcpServer = await aiMcpServerService.findBy({
+    where: {
+      id: ctx.id,
+      workspaceId: ctx.workspaceId,
+    },
+  })
+  if (!mcpServer) {
+    throw notFoundException(
+      t("messages.featureNotFound", { feature: "AIMcpServer" }),
+    )
+  }
+
+  const existing = await aiMcpServerService.findBy({
+    where: {
+      workspaceId: ctx.workspaceId,
+      name: parsedInput.name,
+    },
+  })
+  if (existing && existing.id !== mcpServer.id) {
+    return returnValidationErrors(updateAIMcpServerRequest, {
+      name: {
+        _errors: [
+          t("messages.nameAlreadyExists", {
+            feature: t("fields.mcpServer.label"),
+          }),
+        ],
+      },
+    })
+  }
+
+  await aiMcpServerService.update(mcpServer.id, parsedInput)
+}

@@ -1,0 +1,28 @@
+import type {
+  SendAudioStepSchema,
+  SendCarouselStepSchema,
+  SendFileStepSchema,
+  SendGifStepSchema,
+  SendImageStepSchema,
+  SendMessengerTemplateMessageStepSchema,
+  SendQuickReplyStepSchema,
+  SendTextStepSchema,
+  SendVideoStepSchema,
+  SendWaTemplateMessageStepSchema,
+  WhatsappFlowStepSchema,
+  WhatsappOptionListStepSchema,
+} from "@openmeerkat/flow-config"
+
+export type SendFlowStepData =
+  | SendTextStepSchema
+  | SendImageStepSchema
+  | SendGifStepSchema
+  | SendAudioStepSchema
+  | SendVideoStepSchema
+  | SendFileStepSchema
+  | SendQuickReplyStepSchema
+  | SendCarouselStepSchema
+  | SendWaTemplateMessageStepSchema
+  | WhatsappOptionListStepSchema
+  | WhatsappFlowStepSchema
+  | SendMessengerTemplateMessageStepSchema

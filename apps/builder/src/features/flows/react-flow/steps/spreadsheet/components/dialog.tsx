@@ -1,0 +1,84 @@
+"use client"
+
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { FileSpreadsheetIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
+import type { ReactElement, ReactNode } from "react"
+
+type SpreadsheetDialogProps = {
+  open: boolean
+  onOpenChange: (val: boolean) => void
+  name: string
+  onSubmit: () => void
+  children?: ReactNode
+  trigger?: ReactElement
+}
+
+export const SpreadsheetDialog = ({
+  open = false,
+  onOpenChange,
+  name,
+  onSubmit,
+  children,
+  trigger,
+}: SpreadsheetDialogProps) => {
+  const t = useTranslations()
+  // const { formState } = useFormContext()
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogTrigger
+        render={
+          trigger ?? (
+            <div className="flex flex-col items-center rounded-md border-2 border-transparent p-2 transition-all ease-in hover:cursor-pointer hover:border-blue-500 hover:shadow-xl">
+              <div className="flex items-center justify-center gap-2">
+                <FileSpreadsheetIcon className="text-gray-500" size={20} />
+                <p className="font-medium text-sm">Google Sheets</p>
+              </div>
+              <div className="mt-2 text-gray-500 text-xs">{t(`${name}`)}</div>
+            </div>
+          )
+        }
+      />
+      <DialogContent aria-describedby={undefined} className="flex-1">
+        <DialogHeader>
+          <DialogTitle className="capitalize">
+            Google Sheets - {t(`${name}`)}
+          </DialogTitle>
+          <DialogDescription />
+        </DialogHeader>
+        <div className={"max-h-[calc(100vh-150px)] overflow-y-auto"}>
+          {children}
+        </div>
+        <DialogFooter className="flex items-end">
+          <DialogClose
+            render={
+              <Button size="sm" type="button" variant="secondary">
+                {t("actions.cancel")}
+              </Button>
+            }
+          />
+
+          <Button
+            onClick={() => onSubmit()}
+            size="sm"
+            // disabled={!formState.isValid}
+            type="button"
+          >
+            {t("actions.confirm")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

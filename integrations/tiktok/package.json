@@ -1,0 +1,34 @@
+{
+  "name": "@openmeerkat/integration-tiktok",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openmeerkat/flow-config": "workspace:*",
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "@openmeerkat/utils": "workspace:*",
+    "@types/node": "^24.10.4",
+    "ky": "^2.0.2",
+    "remeda": "^2.34.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "msw": "^2.7.3",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./apis/*": "./src/apis/*.ts",
+    "./lib/*": "./src/lib/*.ts",
+    "./test-handlers": "./src/test-handlers.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

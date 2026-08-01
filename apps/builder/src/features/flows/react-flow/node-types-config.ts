@@ -1,0 +1,21 @@
+"use client"
+
+import { nodeTypeSchema } from "@openmeerkat/flow-config"
+import ButtonEdge from "./edges/button-edge"
+import { NodeAnalyticsViewer } from "./nodes/analytics-viewer"
+
+export const analyticsNodeTypes = {
+  [nodeTypeSchema.enum.sendMessage]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.sendMail]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.landingPage]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.performAction]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.addNotes]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.wait]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.followUp]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.startFlow]: NodeAnalyticsViewer,
+  [nodeTypeSchema.enum.condition]: NodeAnalyticsViewer,
+}
+
+export const edgeTypes = {
+  buttonedge: ButtonEdge,
+}

@@ -1,0 +1,101 @@
+import { stepTypes } from "@openmeerkat/flow-config"
+import { SelectField } from "@openmeerkat/ui/components/form/select-field"
+import { useTranslations } from "next-intl"
+import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useFormContext } from "react-hook-form"
+import { SpreadsheetColumnFilter } from "@/features/flows/react-flow/steps/spreadsheet/components/spreadsheet-column-filter"
+import { SpreadsheetSelect } from "@/features/flows/react-flow/steps/spreadsheet/components/spreadsheet-select"
+import { SpreadsheetCustomFieldMapping } from "@/features/flows/react-flow/steps/spreadsheet/custom-field-mapping"
+import { WorksheetSelect } from "@/features/flows/react-flow/steps/spreadsheet/worksheet-select"
+
+export const GoogleSheetAction = ({ parentName }: { parentName: string }) => {
+  const t = useTranslations()
+  const isFirstRender = useRef(true)
+
+  const getFieldName = useCallback(
+    (field: string) => {
+      if (!parentName) {
+        return field
+      }
+      return `${parentName}.${field}`
+    },
+    [parentName],
+  )
+
+  const { watch, resetField, setValue } = useFormContext()
+  const action = watch(getFieldName("action"))
+  const spreadsheetId = watch(getFieldName("spreadsheetId"))
+  const sheetName = watch(getFieldName("sheetName"))
+
+  const actionOptions = useMemo(
+    () => [
+      {
+        label: t("flows.actions.spreadsheetGetRow"),
+        value: stepTypes.enum.spreadsheetGetRow,
+      },
+      {
+        label: t("flows.actions.spreadsheetGetRandomRow"),
+        value: stepTypes.enum.spreadsheetGetRandomRow,
+      },
+      {
+        label: t("flows.actions.spreadsheetUpdateRow"),
+        value: stepTypes.enum.spreadsheetUpdateRow,
+      },
+      {
+        label: t("flows.actions.spreadsheetSendData"),
+        value: stepTypes.enum.spreadsheetSendData,
+      },
+      {
+        label: t("flows.actions.spreadsheetClearRow"),
+        value: stepTypes.enum.spreadsheetClearRow,
+      },
+    ],
+    [t],
+  )
+
+  const onChangeSpreadsheet = useCallback(() => {
+    resetField(getFieldName("map"))
+    resetField(getFieldName("sheetName"))
+  }, [resetField, getFieldName])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: wip
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    setValue(getFieldName("spreadsheetId"), "")
+  }, [action, setValue, getFieldName])
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SelectField name={getFieldName("action")} options={actionOptions} />
+      <SpreadsheetSelect
+        name={getFieldName("spreadsheetId")}
+        triggerValueChange={onChangeSpreadsheet}
+      />
+      {spreadsheetId && (
+        <WorksheetSelect
+          name={getFieldName("sheetName")}
+          spreadsheetId={spreadsheetId}
+        />
+      )}
+      {spreadsheetId && sheetName && (
+        <SpreadsheetColumnFilter parentName={parentName} />
+      )}
+      {spreadsheetId &&
+        sheetName &&
+        action !== stepTypes.enum.spreadsheetClearRow && (
+          <SpreadsheetCustomFieldMapping
+            parentName={parentName}
+            type={
+              action === stepTypes.enum.spreadsheetGetRow ||
+              action === stepTypes.enum.spreadsheetGetRandomRow
+                ? "get"
+                : "update"
+            }
+          />
+        )}
+    </div>
+  )
+}

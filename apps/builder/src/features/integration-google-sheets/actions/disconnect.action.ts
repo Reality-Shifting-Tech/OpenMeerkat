@@ -1,0 +1,52 @@
+"use server"
+
+import { db, eq, findOrFail } from "@openmeerkat/database/client"
+import {
+  integrationGoogleSheetsModel,
+  integrationModel,
+} from "@openmeerkat/database/schema"
+import {
+  type GoogleSheetsAuthValue,
+  integration as integrationGoogleSheets,
+} from "@openmeerkat/integration-google-sheets"
+import {
+  type WorkspaceIdRequestParams,
+  workspaceIdrequestParams,
+} from "@/features/common/schemas"
+import { logger } from "@/lib/log"
+import { authActionClient } from "@/lib/safe-action"
+
+export const disconnectGoogleSheetsAction = authActionClient
+  .bindArgsSchemas(workspaceIdrequestParams)
+  .action(
+    async ({
+      bindArgsParsedInputs: [workspaceId],
+    }: {
+      bindArgsParsedInputs: WorkspaceIdRequestParams
+    }) => {
+      const googleSheets = await findOrFail({
+        table: integrationGoogleSheetsModel,
+        where: {
+          workspaceId,
+        },
+        message: "Integration Google Sheets not found",
+      })
+      try {
+        await integrationGoogleSheets.disconnect?.(
+          googleSheets.auth as GoogleSheetsAuthValue,
+        )
+      } catch (e) {
+        logger.error(
+          e,
+          `Unable to disconnect google sheets for workspace: ${workspaceId}`,
+        )
+      }
+
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(integrationModel)
+          .where(eq(integrationModel.id, googleSheets.integrationId))
+      })
+      return
+    },
+  )

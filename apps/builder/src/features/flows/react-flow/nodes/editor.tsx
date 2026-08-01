@@ -1,0 +1,503 @@
+import { zodResolver } from "@hookform/resolvers/zod"
+import type { FlowNode, NodeType, StepType } from "@openmeerkat/flow-config"
+import {
+  buttonStepDefaultFn,
+  disabledCopyActionTypes,
+  hiddenActionsStepTypes,
+  MAX_QUICK_REPLIES,
+  stepTypes,
+} from "@openmeerkat/flow-config"
+import { TriggerFormInitially } from "@openmeerkat/ui/components/form/form-trigger-initially"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@openmeerkat/ui/components/ui/dropdown-menu"
+import { Form } from "@openmeerkat/ui/components/ui/form"
+import {
+  Sortable,
+  SortableContent,
+  SortableItem,
+  SortableItemHandle,
+} from "@openmeerkat/ui/components/ui/sortable"
+import { createDebouncedFn } from "@openmeerkat/ui/hooks/create-debounced-fn"
+import { useCallbackRef } from "@openmeerkat/ui/hooks/use-callback-ref"
+import { cn } from "@openmeerkat/ui/lib/utils"
+import { createId } from "@openmeerkat/utils"
+import { useReactFlow } from "@xyflow/react"
+import { CopyIcon, MoveVerticalIcon, PlusIcon, XIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  type Control,
+  useFieldArray,
+  useForm,
+  useFormContext,
+  useWatch,
+} from "react-hook-form"
+import { useInboxStore } from "@/features/inboxes/provider/inbox-store-context"
+import RecursiveDropdownMenu from "../components/recursive-dropdown-menu"
+import { allSteps, DynamicStepEditor } from "../steps"
+import { ButtonStepEditor } from "../steps/button/editor"
+import { ErrorAlert } from "../steps/error-alert"
+import { useFlowTemplate } from "../stores/flow-template-store-provider"
+import { useStepStore } from "../stores/step-store-provider"
+import { useFlowHistory } from "../stores/use-flow-history"
+import { useWhatsappFlow } from "../stores/whatsapp-flow-store-provider"
+import { allNodesConfig } from "./node-config"
+import type { MenuItem } from "./types"
+
+const collectErrorMessages = (node: unknown): string[] => {
+  if (!node || typeof node !== "object") {
+    return []
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap(collectErrorMessages)
+  }
+
+  const messages: string[] = []
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key === "ref" || key === "type") {
+      continue
+    }
+    if (key === "message" && typeof value === "string" && value.length > 0) {
+      messages.push(value)
+      continue
+    }
+    messages.push(...collectErrorMessages(value))
+  }
+
+  return messages
+}
+
+type NodeEditorProps = {
+  nodeId: string
+  nodeType: NodeType
+  nodeDetails: FlowNode["data"]["details"]
+}
+
+const replaceIds = (data: unknown): unknown => {
+  if (Array.isArray(data)) {
+    return data.map(replaceIds)
+  }
+
+  if (data && typeof data === "object") {
+    const nextData: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(data)) {
+      nextData[key] = key === "id" ? createId() : replaceIds(value)
+    }
+
+    return nextData
+  }
+
+  return data
+}
+
+const NodeEditorQuickReplies = () => {
+  const t = useTranslations()
+  const { control } = useFormContext()
+
+  const {
+    fields: quickReplies,
+    append: appendQuickReply,
+    move: moveQuickReply,
+  } = useFieldArray({
+    control,
+    name: "quickReplies",
+  })
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Sortable
+        getItemValue={(item) => item.id}
+        onMove={({ activeIndex, overIndex }) =>
+          moveQuickReply(activeIndex, overIndex)
+        }
+        value={quickReplies}
+      >
+        <SortableContent className="contents gap-2">
+          {quickReplies.map((field, index) => (
+            <SortableItem
+              key={field.id}
+              render={<ButtonStepEditor parentName={`quickReplies.${index}`} />}
+              value={field.id}
+            />
+          ))}
+        </SortableContent>
+      </Sortable>
+      {quickReplies.length < MAX_QUICK_REPLIES ? (
+        <Button
+          onClick={() =>
+            appendQuickReply(
+              buttonStepDefaultFn({
+                label: `${t("fields.quickReply.label")} #${quickReplies.length + 1}`,
+              }),
+            )
+          }
+          type="button"
+          variant="dashed"
+        >
+          <PlusIcon />
+          {t("fields.quickReply.label")}
+        </Button>
+      ) : (
+        <p className="text-muted-foreground text-sm">
+          {t("flows.quickReplies.limitReached", { max: MAX_QUICK_REPLIES })}
+        </p>
+      )}
+    </div>
+  )
+}
+
+const NodeEditorMenu = memo(
+  ({
+    nodeType,
+    onClick,
+  }: {
+    nodeType: NodeType
+    onClick: (menuItem: MenuItem) => void
+  }) => {
+    const t = useTranslations()
+    const inboxes = useInboxStore((s) => s.inboxes)
+    const whatsappTemplates = useFlowTemplate((s) => s.whatsappTemplates)
+    const whatsappFlows = useWhatsappFlow((s) => s.whatsappFlows)
+    const messengerTemplates = useFlowTemplate((s) => s.messengerTemplates)
+    const beforeStep = useWatch({ name: "beforeStep" })
+
+    const [nodeMenus, setNodeMenus] = useState<MenuItem[]>([])
+
+    useEffect(() => {
+      const nodeConfig = nodeType ? allNodesConfig[nodeType]?.(t) : null
+      if (nodeConfig) {
+        setNodeMenus(
+          nodeConfig.menus(t, {
+            inboxes,
+            templates: { waTemplates: whatsappTemplates, messengerTemplates },
+            flows: { waFlows: whatsappFlows },
+            beforeStep,
+          }),
+        )
+      } else {
+        setNodeMenus([])
+      }
+    }, [
+      nodeType,
+      t,
+      inboxes,
+      whatsappTemplates,
+      whatsappFlows,
+      messengerTemplates,
+      beforeStep,
+    ])
+
+    return (
+      nodeMenus.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline">
+                <PlusIcon />
+                {t("actions.create")}
+              </Button>
+            }
+          />
+
+          <DropdownMenuContent className="w-full">
+            <RecursiveDropdownMenu data={nodeMenus} onClick={onClick} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    )
+  },
+)
+
+const FlowValueSync = memo(
+  ({
+    control,
+    pushToFlow,
+  }: {
+    // biome-ignore lint/suspicious/noExplicitAny: form value shape is dynamic per node
+    control: Control<any>
+    pushToFlow: (values: FlowNode["data"]["details"]) => void
+  }) => {
+    const values = useWatch({ control })
+
+    useEffect(() => {
+      pushToFlow(values as FlowNode["data"]["details"])
+    }, [pushToFlow, values])
+
+    return null
+  },
+)
+
+export const NodeEditor = memo((props: NodeEditorProps) => {
+  const { nodeId, nodeType, nodeDetails } = props
+
+  const t = useTranslations()
+  const nodeConfig = nodeType ? allNodesConfig[nodeType]?.(t) : null
+  const validator = nodeConfig?.validator.shape.data.shape.details
+
+  const { getNode, updateNodeData } = useReactFlow()
+  const { updatedButtonData, onChangeButtonData } = useStepStore(
+    (state) => state,
+  )
+  const { takeSnapshot } = useFlowHistory()
+
+  // biome-ignore lint/suspicious/noExplicitAny: wip - complex node data types
+  const form = useForm<any>({
+    // biome-ignore lint/suspicious/noExplicitAny: wip - validator can be undefined
+    resolver: validator ? zodResolver(validator as any) : undefined,
+    defaultValues: {
+      ...nodeDetails,
+    },
+    mode: "onChange",
+  })
+
+  const { control, getValues, setValue } = form
+  const {
+    fields: stepFields,
+    append: appendStep,
+    move: moveStep,
+    remove: removeStep,
+    insert: insertStep,
+  } = useFieldArray({
+    control,
+    name: "steps",
+  })
+
+  const editSnapshotTakenRef = useRef(false)
+  const pushNodeDetailsToFlow = useCallbackRef(
+    (values: FlowNode["data"]["details"]) => {
+      const currentNode = getNode(nodeId)
+
+      if (currentNode) {
+        updateNodeData(nodeId, {
+          ...currentNode.data,
+          details: values,
+        })
+      }
+    },
+  )
+  const releaseEditSnapshot = useMemo(
+    () =>
+      createDebouncedFn(() => {
+        editSnapshotTakenRef.current = false
+      }, 500),
+    [],
+  )
+
+  const pushToFlow = useMemo(
+    () => createDebouncedFn(pushNodeDetailsToFlow, 700),
+    [pushNodeDetailsToFlow],
+  )
+
+  useEffect(() => {
+    const subscription = form.watch((_values, { type } = {}) => {
+      if (type && !editSnapshotTakenRef.current) {
+        takeSnapshot()
+        editSnapshotTakenRef.current = true
+      }
+
+      if (type) {
+        releaseEditSnapshot()
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [form, releaseEditSnapshot, takeSnapshot])
+
+  useEffect(
+    () => () => {
+      pushToFlow.flush()
+    },
+    [pushToFlow],
+  )
+
+  useEffect(() => {
+    if (updatedButtonData) {
+      const targetButtonPath = updatedButtonData.path.replace(
+        "data.details.",
+        "",
+      )
+      if (updatedButtonData.data) {
+        setValue(targetButtonPath, updatedButtonData.data)
+      } else {
+        const parts = targetButtonPath.split(".")
+        const position = parts.pop()
+        const buttonGroupPath = parts.join(".")
+
+        if (position) {
+          const buttons = getValues(buttonGroupPath)
+          buttons.splice(Number.parseInt(position, 10), 1)
+          setValue(buttonGroupPath, Object.values(buttons))
+        }
+      }
+
+      // reset updatedButtonData
+      onChangeButtonData(null)
+    }
+  }, [updatedButtonData, getValues, onChangeButtonData, setValue])
+
+  const onAddStep = useCallback(
+    (menuItem: MenuItem) => {
+      if (menuItem.stepType) {
+        const newStep = allSteps[menuItem.stepType]?.defaultFn(menuItem.props)
+        if (newStep) {
+          appendStep(newStep)
+        }
+      }
+    },
+    [appendStep],
+  )
+
+  const onCopyStep = useCallback(
+    (index: number) => {
+      // biome-ignore lint/suspicious/noExplicitAny: wip - dynamic field path
+      const values = getValues(`steps.${index}` as any)
+      if (values) {
+        insertStep(index + 1, replaceIds(values))
+      }
+    },
+    [getValues, insertStep],
+  )
+
+  const onRemoveStep = useCallback(
+    (index: number) => {
+      removeStep(index)
+    },
+    [removeStep],
+  )
+
+  return (
+    <Form {...form}>
+      {"beforeStep" in nodeDetails && nodeDetails.beforeStep && (
+        <DynamicStepEditor
+          parentName="beforeStep"
+          type={
+            (
+              nodeDetails as {
+                beforeStep: { stepType: StepType }
+              }
+            ).beforeStep.stepType
+          }
+        />
+      )}
+
+      <div className="my-2 flex flex-1 flex-col gap-2">
+        <Sortable
+          getItemValue={(item) => item.id}
+          onMove={({ activeIndex, overIndex }) =>
+            moveStep(activeIndex, overIndex)
+          }
+          value={stepFields}
+        >
+          <SortableContent className="flex w-full flex-col gap-4">
+            {stepFields.map((field, index) => (
+              <SortableItem
+                key={field.id}
+                render={
+                  <div
+                    className={cn(
+                      "flex items-center gap-2",
+                      // biome-ignore lint/suspicious/noExplicitAny: wip
+                      (field as any).stepType === stepTypes.enum.sendCarousel
+                        ? "relative"
+                        : "",
+                    )}
+                  >
+                    {(() => {
+                      const messages = collectErrorMessages(
+                        // biome-ignore lint/suspicious/noExplicitAny: wip - dynamic form errors
+                        (form.formState.errors as any).steps?.[index],
+                      )
+                      return messages.length > 0 ? (
+                        <ErrorAlert message={messages.join(", ")} />
+                      ) : (
+                        <div className="w-4">{"\u00A0"}</div>
+                      )
+                    })()}
+                    <div className={cn("break-word flex-1 overflow-hidden")}>
+                      <DynamicStepEditor
+                        key={field.id}
+                        parentName={`steps.${index}`}
+                        // biome-ignore lint/suspicious/noExplicitAny: wip
+                        type={(field as any).stepType}
+                      />
+                    </div>
+                    {!hiddenActionsStepTypes.includes(
+                      // biome-ignore lint/suspicious/noExplicitAny: wip
+                      (field as any).stepType,
+                    ) && (
+                      <div className="flex flex-col">
+                        <Button
+                          className="size-8 shrink-0"
+                          onClick={() => onRemoveStep(index)}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <XIcon aria-hidden="true" className="size-4" />
+                        </Button>
+
+                        <SortableItemHandle
+                          render={
+                            <Button
+                              className="size-8"
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <MoveVerticalIcon className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                        {!disabledCopyActionTypes.includes(
+                          // biome-ignore lint/suspicious/noExplicitAny: wip
+                          (field as any).stepType,
+                        ) && (
+                          <Button
+                            className="size-8 shrink-0"
+                            onClick={() => onCopyStep(index)}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <CopyIcon aria-hidden="true" className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                }
+                value={field.id}
+              />
+            ))}
+          </SortableContent>
+        </Sortable>
+      </div>
+
+      {"quickReplies" in nodeDetails && nodeDetails.quickReplies && (
+        <>
+          {(() => {
+            const messages = collectErrorMessages(
+              // biome-ignore lint/suspicious/noExplicitAny: wip - dynamic form errors
+              (form.formState.errors as any).quickReplies,
+            )
+            return messages.length > 0 ? (
+              <ErrorAlert message={messages.join(", ")} />
+            ) : null
+          })()}
+          <NodeEditorQuickReplies />
+        </>
+      )}
+
+      <NodeEditorMenu nodeType={nodeType} onClick={onAddStep} />
+
+      <FlowValueSync control={control} pushToFlow={pushToFlow} />
+
+      <TriggerFormInitially form={form} />
+    </Form>
+  )
+})

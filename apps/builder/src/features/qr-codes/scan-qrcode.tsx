@@ -1,0 +1,44 @@
+"use client"
+
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { useState } from "react"
+import { QrCodeLinkContent } from "./qr-code-link-content"
+
+export function ScanQRCodeDialog({
+  title,
+  triggerName,
+  link,
+}: {
+  title: string
+  triggerName: string
+  link: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger
+        render={
+          <Button size="sm" type="button" variant="outline">
+            {triggerName}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription />
+        </DialogHeader>
+        <QrCodeLinkContent link={link} />
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -1,0 +1,407 @@
+import type { Context } from "@openmeerkat/sdk"
+import { DEFAULT_API_VERSION } from "../constants"
+import { MessengerAPIException, rescue } from "../exception"
+import { facebookGraphClient } from "../lib/http-client"
+import { logger } from "../lib/logger"
+import type {
+  MessengerAuthValue,
+  MessengerProfileRequest,
+  PersonaRequest,
+  SyncPersonaInput,
+} from "../schema"
+import { hasLeadsRetrieval } from "./auth"
+
+export const PAGE_SUBSCRIBE_SCOPES = [
+  "messages",
+  "messaging_postbacks",
+  "messaging_optins",
+  "message_reads",
+  "messaging_referrals",
+  "message_echoes",
+  "messaging_customer_information",
+  "messaging_feedback",
+  "messaging_policy_enforcement",
+  "feed",
+  "inbox_labels",
+  "live_videos",
+  "standby",
+]
+
+/**
+ * Page webhook fields for a Facebook Lead Ads-enabled page: the base Messenger
+ * set plus `leadgen`. POSTing this to /subscribed_apps preserves the existing
+ * subscriptions while adding lead delivery. Note: a later plain Messenger
+ * reconnect re-subscribes with `PAGE_SUBSCRIBE_SCOPES` (dropping `leadgen`); the
+ * user re-runs "Add New" to restore it.
+ */
+export const LEAD_ADS_PAGE_SUBSCRIBE_FIELDS = [
+  ...PAGE_SUBSCRIBE_SCOPES,
+  "leadgen",
+]
+
+/**
+ * Page webhook fields implied by a token's granted scopes: the base Messenger
+ * set, plus `leadgen` when the token carries `leads_retrieval`. Lets callers
+ * subscribe a page to exactly what its scopes support without special-casing
+ * lead-ads at each site.
+ */
+export function scopesToPageSubscribeFields(
+  scopes: string[] | undefined,
+): string[] {
+  return hasLeadsRetrieval(scopes)
+    ? LEAD_ADS_PAGE_SUBSCRIBE_FIELDS
+    : PAGE_SUBSCRIBE_SCOPES
+}
+
+export const exchangeLongLivedToken = (
+  settings: {
+    clientId: string
+    clientSecret: string
+    version?: string
+  },
+  accessToken: string,
+): Promise<string> => {
+  const { version = DEFAULT_API_VERSION } = settings
+  const endpoint = `${version}/oauth/access_token`
+
+  return rescue(endpoint, async () => {
+    const res: { access_token: string } = await facebookGraphClient.get(
+      endpoint,
+      {
+        searchParams: {
+          grant_type: "fb_exchange_token",
+          client_id: settings.clientId as string,
+          client_secret: settings.clientSecret as string,
+          fb_exchange_token: accessToken,
+        },
+      },
+    )
+    return res.access_token
+  })
+}
+
+export const getPagePictureUrl = async (props: {
+  ctx: Context<MessengerAuthValue>
+}): Promise<string | undefined> => {
+  const { ctx } = props
+  const { version = DEFAULT_API_VERSION } = ctx.auth
+  const pageId = ctx.auth.metadata.pageId
+  const accessToken = ctx.auth.tokens.accessToken
+  const endpoint = `${version}/${pageId}`
+
+  try {
+    return await rescue(endpoint, async () => {
+      const res: { picture?: { data?: { url?: string } } } =
+        await facebookGraphClient.get(endpoint, {
+          searchParams: {
+            fields: "picture.type(large){url}",
+            access_token: accessToken,
+          },
+        })
+      return res.picture?.data?.url
+    })
+  } catch {
+    return
+  }
+}
+
+export const subscribePageToAppWebhook = (props: {
+  pageId: string
+  accessToken: string
+  version?: string
+  subscribedFields?: string
+}): Promise<void> => {
+  const { version = DEFAULT_API_VERSION } = props
+  const endpoint = `${version}/me/subscribed_apps`
+  const subscribedFields =
+    props.subscribedFields ?? PAGE_SUBSCRIBE_SCOPES.join(",")
+
+  return rescue(endpoint, () =>
+    facebookGraphClient.post(endpoint, {
+      headers: {
+        Authorization: `Bearer ${props.accessToken}`,
+      },
+      json: {
+        subscribed_fields: subscribedFields,
+      },
+    }),
+  )
+}
+
+export const unsubscribePageFromAppWebhook = (props: {
+  pageId: string
+  appAccessToken: string
+  version?: string
+}): Promise<void> => {
+  const { version = DEFAULT_API_VERSION } = props
+  const endpoint = `${version}/${props.pageId}/subscribed_apps`
+
+  return rescue(endpoint, async () => {
+    const response = await facebookGraphClient.delete<{ success?: boolean }>(
+      endpoint,
+      {
+        headers: {
+          Authorization: `Bearer ${props.appAccessToken}`,
+        },
+      },
+    )
+
+    if (response.success !== true) {
+      throw new MessengerAPIException(
+        `Unsubscribe failed for page ${props.pageId}`,
+      )
+    }
+  })
+}
+
+export const updateMessengerProfile = (props: {
+  ctx: Context<MessengerAuthValue>
+  params: MessengerProfileRequest
+}): Promise<void> => {
+  const { ctx, params } = props
+  const { version = DEFAULT_API_VERSION } = ctx.auth
+  const endpoint = `${version}/me/messenger_profile`
+
+  return rescue(endpoint, () =>
+    facebookGraphClient.post(endpoint, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
+      },
+      json: params,
+    }),
+  )
+}
+
+export const createPersona = (props: {
+  ctx: Context<MessengerAuthValue>
+  persona: NonNullable<PersonaRequest>
+}): Promise<{ personaId?: string }> => {
+  const { ctx, persona } = props
+  const endpoint = "me/personas"
+
+  return rescue(endpoint, async () => {
+    const response: { id: string } = await facebookGraphClient.post(
+      `${endpoint}?access_token=${ctx.auth.tokens.accessToken}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        json: persona,
+      },
+    )
+    return { personaId: response.id }
+  })
+}
+
+export const listPersonas = (props: {
+  ctx: Context<MessengerAuthValue>
+}): Promise<Array<{ id: string; name?: string }>> => {
+  const { ctx } = props
+
+  return rescue("me/personas", async () => {
+    const response: { data?: Array<{ id: string; name?: string }> } =
+      await facebookGraphClient.get("me/personas", {
+        headers: {
+          Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
+        },
+      })
+    return response.data ?? []
+  })
+}
+
+const deletePersonaById = (
+  ctx: Context<MessengerAuthValue>,
+  personaId: string,
+): Promise<void> =>
+  rescue(`delete persona ${personaId}`, () =>
+    facebookGraphClient.delete(personaId, {
+      headers: {
+        Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
+      },
+    }),
+  )
+
+/**
+ * Reconcile the page's persona list against Facebook so every persona has a
+ * Facebook persona id:
+ * - personas without a `facebookPersonaId` are created on Facebook (capturing
+ *   the returned id);
+ * - Facebook personas no longer referenced by the page are deleted.
+ *
+ * Facebook personas are immutable, so a renamed/re-pictured persona must arrive
+ * here with its `facebookPersonaId` cleared by the caller to be recreated.
+ *
+ * Resilient by design: a single create/delete failure is logged and skipped
+ * rather than failing the whole settings save (the persona simply keeps no
+ * `facebookPersonaId` and is treated as the page default at send time).
+ */
+export const syncPersonas = async (props: {
+  ctx: Context<MessengerAuthValue>
+  personas: SyncPersonaInput[]
+}): Promise<{
+  personas: Array<{ id: string; facebookPersonaId?: string }>
+}> => {
+  const { ctx, personas } = props
+
+  const synced = await Promise.all(
+    personas.map(async (persona) => {
+      if (persona.facebookPersonaId) {
+        return { id: persona.id, facebookPersonaId: persona.facebookPersonaId }
+      }
+      try {
+        const { personaId } = await createPersona({
+          ctx,
+          persona: {
+            name: persona.name,
+            profile_picture_url: persona.profilePictureUrl,
+          },
+        })
+        return { id: persona.id, facebookPersonaId: personaId }
+      } catch (error) {
+        logger.error(
+          error,
+          `Failed to register Messenger persona ${persona.id}`,
+        )
+        return { id: persona.id, facebookPersonaId: undefined }
+      }
+    }),
+  )
+
+  // Delete Facebook personas no longer referenced by the page.
+  try {
+    const keep = new Set(
+      synced
+        .map((persona) => persona.facebookPersonaId)
+        .filter((id): id is string => Boolean(id)),
+    )
+    const existing = await listPersonas({ ctx })
+    await Promise.all(
+      existing
+        .filter((persona) => !keep.has(persona.id))
+        .map((persona) => deletePersonaById(ctx, persona.id)),
+    )
+  } catch (error) {
+    logger.error(error, "Failed to reconcile deleted Messenger personas")
+  }
+
+  return { personas: synced }
+}
+
+export const getPersistentMenu = (props: {
+  ctx: Context<MessengerAuthValue>
+}): Promise<{
+  persistentMenu?: MessengerProfileRequest["persistent_menu"]
+}> => {
+  const { ctx } = props
+  const { version = DEFAULT_API_VERSION } = ctx.auth
+  const endpoint = `${version}/me/messenger_profile`
+
+  return rescue(endpoint, async () => {
+    const response: {
+      persistent_menu?: MessengerProfileRequest["persistent_menu"]
+    } = await facebookGraphClient.get(endpoint, {
+      headers: {
+        Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
+      },
+      searchParams: {
+        fields: "persistent_menu",
+      },
+    })
+
+    return { persistentMenu: response.persistent_menu }
+  })
+}
+
+export const deleteMessengerProfileFields = (props: {
+  ctx: Pick<Context<MessengerAuthValue>, "auth">
+  fields: string[]
+}): Promise<void> => {
+  const { ctx, fields } = props
+  const { version = DEFAULT_API_VERSION } = ctx.auth
+  const endpoint = `${version}/me/messenger_profile`
+
+  return rescue(endpoint, () =>
+    facebookGraphClient.delete(endpoint, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
+      },
+      json: { fields },
+    }),
+  )
+}
+
+export const addBranding = async (props: {
+  ctx: Context<MessengerAuthValue>
+  title: string
+  url: string
+}): Promise<void> => {
+  const { ctx } = props
+
+  const { persistentMenu } = await getPersistentMenu({ ctx })
+
+  if (!persistentMenu || persistentMenu.length === 0) {
+    await updateMessengerProfile({
+      ctx,
+      params: {
+        get_started: {
+          payload: "GET_STARTED",
+        },
+        persistent_menu: [
+          {
+            locale: "default",
+            composer_input_disabled: false,
+            call_to_actions: [
+              {
+                type: "web_url",
+                title: props.title,
+                url: props.url,
+                webview_height_ratio: "full",
+              },
+            ],
+          },
+        ],
+      },
+    })
+    return
+  }
+
+  const hasBranding = persistentMenu.some((menu) =>
+    menu.call_to_actions?.some(
+      (action) =>
+        action.type === "web_url" &&
+        action.url === props.url &&
+        action.title === props.title,
+    ),
+  )
+
+  if (hasBranding) {
+    return
+  }
+
+  const updatedMenu = persistentMenu.map((menu, index) => {
+    if (index === 0) {
+      return {
+        ...menu,
+        call_to_actions: [
+          ...(menu.call_to_actions || []),
+          {
+            type: "web_url" as const,
+            title: props.title,
+            url: props.url,
+            webview_height_ratio: "full" as const,
+          },
+        ],
+      }
+    }
+    return menu
+  })
+
+  await updateMessengerProfile({
+    ctx,
+    params: {
+      persistent_menu: updatedMenu,
+    },
+  })
+}

@@ -1,0 +1,60 @@
+"use client"
+
+import type { AIGenerateTextSchema } from "@openmeerkat/flow-config"
+import { useTranslations } from "next-intl"
+import { getAiProviderLabelKey } from "@/features/ai-agents/lib/ai-provider-label"
+import { useFlowTemplate } from "../../stores/flow-template-store-provider"
+import { StateHandle } from "../base/step-state-handles"
+import { AIIcon } from "./components/ai-icon"
+import { getOpenaiCompatibleStepProviderLabel } from "./components/openai-compatible-label"
+
+type AIGenerateTextViewerProps = {
+  data: AIGenerateTextSchema
+}
+
+export const AIGenerateTextViewer = (props: AIGenerateTextViewerProps) => {
+  const { data } = props
+  const t = useTranslations()
+  const openaiCompatibleIntegrations = useFlowTemplate(
+    (store) => store.openaiCompatibleIntegrations,
+  )
+
+  const successState = data.states?.find((s) => s.stateType === "success")
+  const errorState = data.states?.find((s) => s.stateType === "error")
+
+  return (
+    <div className="flex flex-col gap-4 py-4">
+      <div className="flex w-full items-center justify-center gap-2 text-center font-bold">
+        <AIIcon
+          label={t("fields.flows.aiGenerateText", {
+            aiName: getOpenaiCompatibleStepProviderLabel({
+              fallback: t(getAiProviderLabelKey(data.provider)),
+              integrations: openaiCompatibleIntegrations,
+              step: data,
+            }),
+          })}
+          provider={data.provider}
+        />
+      </div>
+
+      <div className="flex flex-col items-end gap-2">
+        {successState && (
+          <StateHandle
+            borderClass="border-green-500"
+            fillClass="bg-green-500"
+            label={t("messages.success")}
+            stateId={successState.id}
+          />
+        )}
+        {errorState && (
+          <StateHandle
+            borderClass="border-red-500"
+            fillClass="bg-red-500"
+            label={t("messages.failed")}
+            stateId={errorState.id}
+          />
+        )}
+      </div>
+    </div>
+  )
+}

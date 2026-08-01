@@ -1,0 +1,304 @@
+"use client"
+
+import { folderTypes } from "@openmeerkat/database/partials"
+import { DataTable } from "@openmeerkat/ui/components/data-table/data-table"
+import { DataTableColumnHeader } from "@openmeerkat/ui/components/data-table/data-table-column-header"
+import { DataTableToolbar } from "@openmeerkat/ui/components/data-table/data-table-toolbar"
+import { Badge } from "@openmeerkat/ui/components/ui/badge"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import { Checkbox } from "@openmeerkat/ui/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@openmeerkat/ui/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@openmeerkat/ui/components/ui/tooltip"
+import { useDataTable } from "@openmeerkat/ui/hooks/use-data-table"
+import type { DataTableRowAction } from "@openmeerkat/ui/types/data-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import {
+  CheckCircleIcon,
+  FolderUpIcon,
+  MoreHorizontalIcon,
+  PauseCircleIcon,
+  TextIcon,
+  Trash2Icon,
+} from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import React, { use, useCallback, useMemo } from "react"
+import { toast } from "sonner"
+import type { listSequences } from "@/features/sequences/queries"
+import { ChangeFolderDialog } from "../folders/change-folder"
+import { updateSequenceAction } from "./actions/update-sequence.action"
+import { DeleteSequenceDialog } from "./delete-sequence-dialog"
+import { RenameSequenceDialog } from "./rename-sequence-dialog"
+import type { ListSequencesResponse } from "./schema/action"
+import { SequencesTableToolbarActions } from "./sequences-table-toolbar-actions"
+
+type SequencesTableProps = {
+  workspaceId: string
+  promises: Promise<[Awaited<ReturnType<typeof listSequences>>]>
+}
+
+export function SequencesTable({ workspaceId, promises }: SequencesTableProps) {
+  const t = useTranslations()
+  const router = useRouter()
+
+  const [{ data, pageCount }] = use(promises)
+
+  const [rowAction, setRowAction] = React.useState<DataTableRowAction<
+    ListSequencesResponse["data"][number]
+  > | null>(null)
+
+  const handleToggleStatus = useCallback(
+    async (sequence: ListSequencesResponse["data"][number]) => {
+      try {
+        await updateSequenceAction(workspaceId, sequence.id, {
+          active: !sequence.active,
+        })
+        toast.success(
+          t(sequence.active ? "sequences.deactivated" : "sequences.activated"),
+        )
+        router.refresh()
+      } catch {
+        toast.error(t("messages.unknownError"))
+      }
+    },
+    [workspaceId, t, router],
+  )
+
+  const columns = useMemo<ColumnDef<ListSequencesResponse["data"][number]>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table: dataTable }) => (
+          <Checkbox
+            aria-label={t("actions.selectAll")}
+            checked={dataTable.getIsAllPageRowsSelected()}
+            className="translate-y-0.5 cursor-pointer"
+            indeterminate={dataTable.getIsSomePageRowsSelected()}
+            onCheckedChange={(value) =>
+              dataTable.toggleAllPageRowsSelected(Boolean(value))
+            }
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            aria-label={t("actions.selectRow")}
+            checked={row.getIsSelected()}
+            className="translate-y-0.5 cursor-pointer"
+            onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+          />
+        ),
+        size: 50,
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
+        id: "name",
+        accessorKey: "name",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title={t("fields.name.label")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="max-w-75 truncate">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    className="truncate"
+                    href={`/space/${workspaceId}/sequences/${row.original.id}`}
+                  >
+                    {row.original.name ?? ""}
+                  </Link>
+                }
+              />
+              <TooltipContent>
+                <p>{row.original.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ),
+        meta: {
+          label: t("fields.name.label"),
+          placeholder: t("fields.name.placeholder"),
+          variant: "text",
+        },
+        size: 300,
+        enableSorting: true,
+        enableColumnFilter: true,
+      },
+      {
+        accessorKey: "subscribers",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="w-full justify-center"
+            column={column}
+            title={t("sequences.subscribers")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center">{row.original.subscribersCount}</div>
+        ),
+      },
+      {
+        accessorKey: "messages",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="w-full justify-center"
+            column={column}
+            title={t("sequences.step")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center">{row.original.stepsCount}</div>
+        ),
+        size: 100,
+        enableSorting: true,
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="w-full justify-center"
+            column={column}
+            title={t("fields.status.label")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center">
+            {row.original.active ? (
+              <Badge variant="default">Active</Badge>
+            ) : (
+              <Badge variant="outline">Inactive</Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => (
+          <div className="w-full text-center">{t("actions.actions")}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button size="icon" variant="ghost">
+                    <MoreHorizontalIcon className="h-4 w-4" />
+                    <span className="sr-only">Open menu</span>
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => handleToggleStatus(row.original)}
+                >
+                  {row.original.active ? (
+                    <>
+                      <PauseCircleIcon className="me-2" />
+                      {t("actions.deactivate")}
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="me-2" />
+                      {t("actions.activate")}
+                    </>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setRowAction({ row, variant: "update" })}
+                >
+                  <TextIcon className="me-2" />
+                  {t("actions.rename")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setRowAction({ row, variant: "move" })}
+                >
+                  <FolderUpIcon className="me-2" />
+                  {t("actions.move")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="hover:bg-muted hover:text-destructive"
+                  onClick={() => setRowAction({ row, variant: "delete" })}
+                >
+                  <Trash2Icon className="me-2" />
+                  {t("actions.delete")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+        size: 50,
+        enableSorting: false,
+        enableHiding: false,
+      },
+    ],
+    [t, workspaceId, handleToggleStatus],
+  )
+
+  const { table } = useDataTable({
+    data,
+    columns,
+    pageCount,
+    initialState: {
+      sorting: [{ id: "createdAt", desc: true }],
+      columnPinning: { right: ["actions"] },
+    },
+    getRowId: (originalRow) => originalRow.id,
+    clearOnDefault: true,
+    shallow: false,
+  })
+
+  return (
+    <>
+      <DataTable table={table}>
+        <DataTableToolbar table={table}>
+          <SequencesTableToolbarActions
+            setRowAction={setRowAction}
+            table={table}
+            workspaceId={workspaceId}
+          />
+        </DataTableToolbar>
+      </DataTable>
+
+      <RenameSequenceDialog
+        onOpenChange={() => setRowAction(null)}
+        onSuccess={() => {
+          router.refresh()
+        }}
+        open={rowAction?.variant === "update"}
+        sequence={rowAction?.row.original || null}
+      />
+
+      <ChangeFolderDialog
+        currentFolderId={rowAction?.row.original?.folderId || null}
+        folderType={folderTypes.enum.sequence}
+        modelIds={rowAction?.row.original ? [rowAction.row.original.id] : []}
+        onOpenChange={() => setRowAction(null)}
+        open={rowAction?.variant === "move"}
+        workspaceId={workspaceId}
+      />
+
+      <DeleteSequenceDialog
+        onOpenChange={() => setRowAction(null)}
+        onSuccess={() => {
+          router.refresh()
+        }}
+        open={rowAction?.variant === "delete"}
+        sequence={rowAction?.row.original || null}
+      />
+    </>
+  )
+}

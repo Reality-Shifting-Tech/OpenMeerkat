@@ -1,0 +1,221 @@
+import type { RichButtonPayloadEntry as DatabaseRichButtonPayloadEntry } from "@openmeerkat/database/schema"
+import type {
+  ContactInboxModel,
+  ConversationModel,
+  MessageModel,
+} from "@openmeerkat/database/types"
+import type {
+  ButtonStepProps,
+  MessengerTemplateParams,
+  MetadataPayload,
+  SendAudioStepSchema,
+  SendCardStepSchema,
+  SendCarouselStepSchema,
+  SendFileStepSchema,
+  SendGifStepSchema,
+  SendImageStepSchema,
+  SendMessengerTemplateMessageStepSchema,
+  SendQuickReplyStepSchema,
+  SendTextStepSchema,
+  SendVideoStepSchema,
+  SendWaTemplateMessageStepSchema,
+  WaTemplateParams,
+} from "@openmeerkat/flow-config"
+import type { CommentAnchor, MessageButtonTemplate } from "@openmeerkat/sdk"
+import { Queue } from "bullmq"
+import {
+  defaultJobOptions,
+  fakeQueue,
+  getRedisConnection,
+} from "../../lib/connection"
+import { queueNames } from "../../lib/types"
+import type { BotResponseTrackingContext } from "../types"
+
+export type { RichButtonPayloadEntry } from "@openmeerkat/database/schema"
+
+export const ChatJobAction = {
+  sendChannelMessage: "sendChannelMessage",
+  sendFlowMessage: "sendFlowMessage",
+  sendChatMessage: "sendChatMessage",
+  sendWhatsappTemplateMessage: "sendWhatsappTemplateMessage",
+  sendMessengerTemplateMessage: "sendMessengerTemplateMessage",
+  sendTyping: "sendTyping",
+  notifyExportResult: "notifyExportResult",
+  broadcastEvent: "broadcastEvent",
+  deleteChannelMessage: "deleteChannelMessage",
+  editChannelMessage: "editChannelMessage",
+  changeChannelMessageState: "changeChannelMessageState",
+} as const
+
+export type ChatJobSendChannelMessage = {
+  type: typeof ChatJobAction.sendChannelMessage
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    message: MessageModel & {
+      clientId?: string | undefined
+      parentCreatedAt?: Date | null
+    }
+    quickReplies?: MessageButtonTemplate[]
+    metadata?: MetadataPayload
+    sendFrom?: "inbox"
+  }
+}
+
+export type ChatJobSendFlowStep = {
+  type: typeof ChatJobAction.sendFlowMessage
+  data: {
+    conversationId: string
+    contactInboxId?: string
+    flowId: string
+    flowVersionId?: string
+    step:
+      | SendTextStepSchema
+      | SendImageStepSchema
+      | SendGifStepSchema
+      | SendFileStepSchema
+      | SendVideoStepSchema
+      | SendAudioStepSchema
+      | SendCardStepSchema
+      | SendCarouselStepSchema
+      | SendQuickReplyStepSchema
+      | SendWaTemplateMessageStepSchema
+      | SendMessengerTemplateMessageStepSchema
+    trackingContext?: BotResponseTrackingContext
+    metadata?: MetadataPayload
+    richResponse?: {
+      executionId: string
+      buttonPayloads: Record<string, DatabaseRichButtonPayloadEntry>
+    }
+    quickReplies?: ButtonStepProps[]
+    sendFrom?: "inbox"
+    /** See {@link CommentAnchor}. */
+    commentAnchor?: CommentAnchor
+  }
+}
+
+export type ChatJobSendChatMessage = {
+  type: typeof ChatJobAction.sendChatMessage
+  data: {
+    conversation: ConversationModel
+    contactInbox?: ContactInboxModel
+    text?: string
+    url?: string
+    storagePath?: string
+    quickReplies?: MessageButtonTemplate[]
+    trackingContext?: BotResponseTrackingContext
+    metadata?: MetadataPayload
+  }
+}
+
+export type ChatJobSendWhatsappTemplateMessage = {
+  type: typeof ChatJobAction.sendWhatsappTemplateMessage
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    templateId: string
+    broadcastId: string
+    templateData?: WaTemplateParams
+    metadata?: MetadataPayload
+  }
+}
+
+export type ChatJobSendMessengerTemplateMessage = {
+  type: typeof ChatJobAction.sendMessengerTemplateMessage
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    templateId: string
+    broadcastId: string
+    templateData?: MessengerTemplateParams
+    // Separate from templateData — create-broadcast.action previously stored
+    // buttons inside templateData causing a type lie. Now explicitly typed.
+    buttons?: Array<{ id: string; label: string; flowId?: string }>
+    metadata?: MetadataPayload
+  }
+}
+
+export type ChatJobSendTyping = {
+  type: typeof ChatJobAction.sendTyping
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    typing: boolean
+    seconds?: number
+    metadata?: MetadataPayload
+  }
+}
+
+export type ChatJobBroadcastEvent = {
+  type: typeof ChatJobAction.broadcastEvent
+  data: {
+    workspaceId: string
+    event: unknown
+  }
+}
+
+export type ChatJobNotifyExportResult = {
+  type: typeof ChatJobAction.notifyExportResult
+  data: Record<string, unknown>
+}
+
+export type ChatJobDeleteChannelMessage = {
+  type: typeof ChatJobAction.deleteChannelMessage
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    message: {
+      id: string
+      createdAt: Date
+    }
+  }
+}
+
+export type ChatJobEditChannelMessage = {
+  type: typeof ChatJobAction.editChannelMessage
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    message: {
+      id: string
+      createdAt: Date
+    }
+    newText: string
+    newAttachmentUrl?: string
+  }
+}
+
+export type ChatJobChangeChannelMessageState = {
+  type: typeof ChatJobAction.changeChannelMessageState
+  data: {
+    conversation: ConversationModel
+    contactInbox: ContactInboxModel
+    message: {
+      id: string
+      createdAt: Date
+    }
+    liked?: boolean
+    hidden?: boolean
+  }
+}
+
+export type ChatJobData =
+  | ChatJobSendChannelMessage
+  | ChatJobSendFlowStep
+  | ChatJobSendChatMessage
+  | ChatJobSendWhatsappTemplateMessage
+  | ChatJobSendMessengerTemplateMessage
+  | ChatJobSendTyping
+  | ChatJobBroadcastEvent
+  | ChatJobNotifyExportResult
+  | ChatJobDeleteChannelMessage
+  | ChatJobEditChannelMessage
+  | ChatJobChangeChannelMessageState
+
+export const chatQueue =
+  process.env.NEXT_PHASE === "phase-production-build"
+    ? fakeQueue
+    : new Queue<ChatJobData>(queueNames.enum.chat, {
+        connection: getRedisConnection(),
+        defaultJobOptions,
+      })

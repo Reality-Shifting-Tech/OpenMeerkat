@@ -1,0 +1,619 @@
+import type {
+  Context,
+  Handler,
+  IncomingAttachment,
+  Oauth2AuthValue,
+  Oauth2Config,
+} from "@openmeerkat/sdk"
+import { z } from "zod"
+import type {
+  CloneMessengerTemplateProps,
+  ListMessengerMessageTemplatesProps,
+  ListMessengerMessageTemplatesResponse,
+  MessengerMessageTemplateEntity,
+} from "./apis/message-templates"
+import type { FacebookPostDetails } from "./apis/post"
+
+export const MESSENGER_MESSAGE_METADATA = "SENT_FROM_OPENMEERKAT"
+
+export type MessengerConfig = Oauth2Config & {
+  verifyToken?: string
+  version: string
+  stateParams: {
+    workspaceId: string
+  }
+}
+
+export type MessengerAuthValue = Oauth2AuthValue & {
+  metadata: {
+    pageId: string
+    pageName: string
+    version: string
+  }
+}
+
+export type MessengerIntegrationDetail = {
+  /** Page default Facebook persona id (registered from the default persona). */
+  personaId: string
+  /**
+   * The page's configured personas (jsonb on `IntegrationMessenger.personas`).
+   * Used to resolve a contact's chosen persona (local id) to its current
+   * Facebook persona id at send time.
+   */
+  personas?: Array<{ id: string; facebookPersonaId?: string }>
+}
+
+/** A page persona to reconcile against Facebook in the `syncPersonas` action. */
+export type SyncPersonaInput = {
+  id: string
+  name: string
+  profilePictureUrl: string
+  facebookPersonaId?: string
+}
+
+export type MessengerActions<
+  IAuth extends MessengerAuthValue = MessengerAuthValue,
+> = {
+  syncPersonas: (props: {
+    ctx: Context<IAuth>
+    personas: SyncPersonaInput[]
+  }) => Promise<{ personas: Array<{ id: string; facebookPersonaId?: string }> }>
+  getPostDetails: (props: {
+    ctx: Pick<Context<IAuth>, "auth">
+    input: { postId: string }
+  }) => Promise<FacebookPostDetails>
+  getUserInboxLink: (props: {
+    ctx: { auth: IAuth }
+    input: { userId: string }
+  }) => Promise<string | null>
+  getCommentAttachmentType: (props: {
+    ctx: Context<IAuth>
+    input: { commentId: string }
+  }) => Promise<string | null>
+  getCommentAttachment: (props: {
+    ctx: Context<IAuth>
+    input: { commentId: string }
+  }) => Promise<{ type: string | null; attachment?: IncomingAttachment }>
+  listMessageTemplates: Handler<
+    { ctx: Context<IAuth>; input?: ListMessengerMessageTemplatesProps },
+    ListMessengerMessageTemplatesResponse
+  >
+  cloneMessageTemplate: Handler<
+    { ctx: Context<IAuth>; input: CloneMessengerTemplateProps },
+    MessengerMessageTemplateEntity
+  >
+}
+
+// Common attachment types — includes all types Facebook may send in a webhook
+const attachmentTypeSchema = z.enum([
+  "image",
+  "video",
+  "audio",
+  "file",
+  "template",
+  "sticker",
+  "location",
+  "share",
+  "fallback",
+])
+
+// Base attachment payload — url optional because template attachments have no url
+const baseAttachmentPayloadSchema = z.object({
+  url: z.url().optional(),
+  coordinates: z
+    .object({
+      lat: z.number().optional(),
+      long: z.number().optional(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+    })
+    .optional(),
+})
+
+// Common ID schemas
+const idSchema = z.object({
+  id: z.string(),
+})
+
+export const messengerAttachmentSchema = z.object({
+  type: attachmentTypeSchema,
+  payload: baseAttachmentPayloadSchema,
+})
+export type MessengerAttachment = z.infer<typeof messengerAttachmentSchema>
+
+export const messengerMessageSchema = z.object({
+  mid: z.string(),
+  text: z.string().optional(),
+  is_echo: z.boolean().optional(),
+  attachments: z.array(messengerAttachmentSchema).optional(),
+  metadata: z.string().optional(),
+  quick_reply: z
+    .object({
+      payload: z.string(),
+      title: z.string().optional(),
+    })
+    .optional(),
+})
+export type MessengerMessage = z.infer<typeof messengerMessageSchema>
+
+export const messengerDeliverySchema = z.object({
+  mids: z.array(z.string()),
+  watermark: z.number(),
+})
+
+export const messengerReadSchema = z.object({
+  watermark: z.number(),
+})
+
+export const messengerPostbackSchema = z.object({
+  mid: z.string(),
+  title: z.string(),
+  payload: z.string(),
+})
+
+export const messengerReferralSchema = z.object({
+  ref: z.string(),
+  source: z.string(),
+  type: z.string(),
+  ad_id: z.string().optional(),
+  source_url: z.string().optional(),
+  source_platform: z.string().optional(),
+  ads_context_data: z
+    .object({
+      ad_title: z.string().optional(),
+      post_id: z.string().optional(),
+      photo_url: z.string().optional(),
+      video_url: z.string().optional(),
+      product_id: z.string().optional(),
+      flow_id: z.string().optional(),
+    })
+    .optional(),
+})
+export type MessengerReferral = z.infer<typeof messengerReferralSchema>
+
+export const messengerMessagingEventSchema = z.object({
+  sender: idSchema,
+  recipient: idSchema,
+  timestamp: z.number(),
+  message: messengerMessageSchema.optional(),
+  delivery: messengerDeliverySchema.optional(),
+  read: messengerReadSchema.optional(),
+  postback: messengerPostbackSchema.optional(),
+  referral: messengerReferralSchema.optional(),
+})
+export type MessengerMessagingEvent = z.infer<
+  typeof messengerMessagingEventSchema
+>
+
+export const messengerInboxLabelsChangeSchema = z.object({
+  field: z.literal("inbox_labels"),
+  value: z.object({
+    user: z.object({ id: z.string() }).optional(),
+    action: z.string(),
+    label: z.object({
+      id: z.string(),
+      // Omitted by FB on some actions (e.g. user label add/remove) — only
+      // present when the label name is relevant (create/delete label).
+      page_label_name: z.string().optional(),
+    }),
+  }),
+})
+export type MessengerInboxLabelsChange = z.infer<
+  typeof messengerInboxLabelsChangeSchema
+>
+
+export const messengerFeedCommentValueSchema = z.object({
+  item: z.literal("comment"),
+  verb: z.enum(["add", "remove", "edited"]),
+  comment_id: z.string(),
+  post_id: z.string(),
+  parent_id: z.string().optional(),
+  from: z.object({ id: z.string(), name: z.string().optional() }),
+  message: z.string().optional(),
+  created_time: z.number(),
+})
+export type MessengerFeedCommentValue = z.infer<
+  typeof messengerFeedCommentValueSchema
+>
+
+// Accept any feed event value — the webhook handler filters for comment items.
+// Using z.unknown() here prevents parse errors from non-comment feed events
+// (photos, posts, likes, etc.) that would otherwise break the entire webhook.
+export const messengerFeedChangeSchema = z.object({
+  field: z.literal("feed"),
+  value: z.unknown(),
+})
+export type MessengerFeedChange = z.infer<typeof messengerFeedChangeSchema>
+
+// Facebook Lead Ads: a `leadgen` change carries only ids — the worker fetches
+// the lead's answers from the Graph API using the page token.
+export const messengerLeadgenValueSchema = z.object({
+  leadgen_id: z.string(),
+  form_id: z.string(),
+  page_id: z.string(),
+  created_time: z.number().optional(),
+  ad_id: z.string().optional(),
+  adgroup_id: z.string().optional(),
+})
+export type MessengerLeadgenValue = z.infer<typeof messengerLeadgenValueSchema>
+
+export const messengerPageEntrySchema = z.object({
+  id: z.string(),
+  time: z.number(),
+  messaging: z.array(messengerMessagingEventSchema).optional(),
+  changes: z.array(messengerInboxLabelsChangeSchema).optional(),
+})
+
+export const messengerWebhookEventSchema = z.object({
+  object: z.literal("page"),
+  entry: z.array(messengerPageEntrySchema),
+})
+export type MessengerWebhookEvent = z.infer<typeof messengerWebhookEventSchema>
+
+export const incomingWebhookEntrySchema = messengerPageEntrySchema.extend({
+  changes: z
+    .array(z.object({ field: z.string(), value: z.unknown() }))
+    .optional(),
+})
+export type IncomingWebhookEntry = z.infer<typeof incomingWebhookEntrySchema>
+
+export const incomingWebhookEventSchema = z.object({
+  object: z.literal("page"),
+  entry: z.array(incomingWebhookEntrySchema),
+})
+export type IncomingWebhookEvent = z.infer<typeof incomingWebhookEventSchema>
+
+export const facebookQuickReplySchema = z.object({
+  content_type: z.enum(["text", "location", "user_phone_number", "user_email"]),
+  title: z.string().optional(),
+  payload: z.string().optional(),
+  image_url: z.url().optional(),
+})
+export type FacebookQuickReply = z.infer<typeof facebookQuickReplySchema>
+
+export const facebookButtonSchema = z.object({
+  type: z.enum(["web_url", "postback", "phone_number"]),
+  title: z.string(),
+  url: z.url().optional(),
+  payload: z.string().optional(),
+  webview_height_ratio: z.enum(["compact", "tall", "full"]).optional(),
+})
+export type FacebookButton = z.infer<typeof facebookButtonSchema>
+
+export const facebookElementSchema = z.object({
+  title: z.string().optional(),
+  subtitle: z.string().optional(),
+  image_url: z.url().optional(),
+  default_action: z
+    .object({
+      type: z.literal("web_url"),
+      url: z.url(),
+    })
+    .optional(),
+  buttons: z.array(facebookButtonSchema).max(3).optional(),
+})
+export type FacebookElement = z.infer<typeof facebookElementSchema>
+
+/**
+ * How Messenger sizes the images of a generic template's elements: `horizontal`
+ * is 1.91:1, `square` is 1:1. Meta accepts no other value and defaults to
+ * `horizontal` when the field is absent.
+ */
+export const facebookImageAspectRatioSchema = z.enum(["horizontal", "square"])
+export type FacebookImageAspectRatio = z.infer<
+  typeof facebookImageAspectRatioSchema
+>
+
+export const facebookMessageAttachmentPayloadSchema = z.object({
+  url: z.url().optional(),
+  is_reusable: z.boolean().optional(),
+  image_aspect_ratio: facebookImageAspectRatioSchema.optional(),
+  template_type: z
+    .enum([
+      "generic",
+      "button",
+      "media",
+      "receipt",
+      "airline_boardingpass",
+      "airline_checkin",
+      "airline_itinerary",
+      "airline_update",
+    ])
+    .optional(),
+  text: z.string().optional(),
+  buttons: z.array(facebookButtonSchema).optional(),
+  elements: z.array(facebookElementSchema).optional(),
+  attachment_id: z.string().optional(),
+  name_placeholder: z.string().optional(),
+  params: z.array(z.object({ key: z.string(), value: z.string() })).optional(),
+})
+export type FacebookMessageAttachmentPayload = z.infer<
+  typeof facebookMessageAttachmentPayloadSchema
+>
+
+export const facebookMessageAttachmentSchema = z.object({
+  type: z.enum(["image", "video", "audio", "file", "template"]),
+  payload: facebookMessageAttachmentPayloadSchema,
+})
+export type FacebookMessageAttachment = z.infer<
+  typeof facebookMessageAttachmentSchema
+>
+
+// Utility message template structure (message.template, not message.attachment)
+const facebookMessageTemplateSchema = z.object({
+  name: z.string(),
+  language: z.object({ code: z.string() }),
+  components: z.array(z.unknown()).optional(),
+})
+
+export const facebookMessageSchema = z.object({
+  text: z.string().optional(),
+  attachment: facebookMessageAttachmentSchema.optional(),
+  template: facebookMessageTemplateSchema.optional(),
+  quick_replies: z.array(facebookQuickReplySchema).max(13).optional(),
+  metadata: z.string().optional(),
+})
+export type FacebookMessage = z.infer<typeof facebookMessageSchema>
+
+export const facebookRecipientSchema = z.object({
+  id: z.string().optional(),
+  phone_number: z.string().optional(),
+  name: z
+    .object({
+      first_name: z.string(),
+      last_name: z.string(),
+    })
+    .optional(),
+})
+export type FacebookRecipient = z.infer<typeof facebookRecipientSchema>
+
+export const facebookSendMessageRequestSchema = z.object({
+  recipient: facebookRecipientSchema,
+  message: facebookMessageSchema.optional(),
+  sender_action: z.enum(["typing_on", "typing_off", "mark_seen"]).optional(),
+  messaging_type: z
+    .enum(["RESPONSE", "UPDATE", "MESSAGE_TAG", "UTILITY"])
+    .default("RESPONSE")
+    .optional(),
+  tag: z
+    .enum([
+      "COMMUNITY_ALERT",
+      "CONFIRMED_EVENT_UPDATE",
+      "NON_PROMOTIONAL_SUBSCRIPTION",
+      "PAIRING_UPDATE",
+      "APPLICATION_UPDATE",
+      "ACCOUNT_UPDATE",
+      "PAYMENT_UPDATE",
+      "PERSONAL_FINANCE_UPDATE",
+      "SHIPPING_UPDATE",
+      "RESERVATION_UPDATE",
+      "ISSUE_RESOLUTION",
+      "APPOINTMENT_UPDATE",
+      "GAME_EVENT",
+      "TRANSPORTATION_UPDATE",
+      "FEATURE_FUNCTIONALITY_UPDATE",
+      "TICKET_UPDATE",
+      "HUMAN_AGENT",
+    ])
+    .optional(),
+  notification_type: z.enum(["REGULAR", "SILENT_PUSH", "NO_PUSH"]).optional(),
+  persona_id: z.string().optional(),
+})
+export type FacebookSendMessageRequest = z.infer<
+  typeof facebookSendMessageRequestSchema
+>
+
+export const facebookSendMessageResponseSchema = z.object({
+  recipient_id: z.string(),
+  message_id: z.string().optional(),
+  attachment_id: z.string().optional(),
+})
+export type FacebookSendMessageResponse = z.infer<
+  typeof facebookSendMessageResponseSchema
+>
+
+export const facebookErrorSchema = z.object({
+  message: z.string(),
+  type: z.string(),
+  code: z.number(),
+  error_subcode: z.number().optional(),
+  fbtrace_id: z.string().optional(),
+})
+export type FacebookError = z.infer<typeof facebookErrorSchema>
+
+export const facebookGraphAPIErrorSchema = z.object({
+  error: facebookErrorSchema,
+})
+export type FacebookGraphAPIError = z.infer<typeof facebookGraphAPIErrorSchema>
+
+// Facebook User Profile schema
+export const facebookUserProfileSchema = z.object({
+  id: z.string(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  name: z.string().optional(),
+  profile_pic: z.url().optional(),
+  locale: z.string().optional(),
+  timezone: z.number().optional(),
+  gender: z.string().optional(),
+})
+export type FacebookUserProfile = z.infer<typeof facebookUserProfileSchema>
+
+// Facebook Page schema
+export const facebookPageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  access_token: z.string().optional(),
+  category: z.string().optional(),
+  category_list: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+      }),
+    )
+    .optional(),
+  tasks: z.array(z.string()).optional(),
+})
+export type FacebookPage = z.infer<typeof facebookPageSchema>
+export type ConnectableFacebookPage = FacebookPage & { isConnectable: boolean }
+
+// Webhook verification schemas
+export const webhookVerificationRequestSchema = z.object({
+  "hub.mode": z.literal("subscribe"),
+  "hub.challenge": z.string(),
+  "hub.verify_token": z.string(),
+})
+export type WebhookVerificationRequest = z.infer<
+  typeof webhookVerificationRequestSchema
+>
+
+// Message processing queue schemas
+export const processMessageQueueDataSchema = z.object({
+  messageId: z.string(),
+  senderId: z.string(),
+  recipientId: z.string(),
+  pageId: z.string(),
+  text: z.string().optional(),
+  attachments: z.array(messengerAttachmentSchema).optional(),
+  config: z.object({
+    clientId: z.string(),
+    clientSecret: z.string(),
+    accessToken: z.string(),
+    verifyToken: z.string(),
+    version: z.string(),
+  }),
+})
+export type ProcessMessageQueueData = z.infer<
+  typeof processMessageQueueDataSchema
+>
+
+export const processDeliveryQueueDataSchema = z.object({
+  messageIds: z.array(z.string()),
+  senderId: z.string(),
+  pageId: z.string(),
+  watermark: z.number(),
+  config: z.object({
+    clientId: z.string(),
+    clientSecret: z.string(),
+    accessToken: z.string(),
+    verifyToken: z.string(),
+    version: z.string(),
+  }),
+})
+export type ProcessDeliveryQueueData = z.infer<
+  typeof processDeliveryQueueDataSchema
+>
+
+export const processReadQueueDataSchema = z.object({
+  senderId: z.string(),
+  pageId: z.string(),
+  watermark: z.number(),
+  config: z.object({
+    clientId: z.string(),
+    clientSecret: z.string(),
+    accessToken: z.string(),
+    verifyToken: z.string(),
+    version: z.string(),
+  }),
+})
+export type ProcessReadQueueData = z.infer<typeof processReadQueueDataSchema>
+
+export const processPostbackQueueDataSchema = z.object({
+  senderId: z.string(),
+  recipientId: z.string(),
+  pageId: z.string(),
+  title: z.string(),
+  payload: z.string(),
+  config: z.object({
+    clientId: z.string(),
+    clientSecret: z.string(),
+    accessToken: z.string(),
+    verifyToken: z.string(),
+    version: z.string(),
+  }),
+})
+export type ProcessPostbackQueueData = z.infer<
+  typeof processPostbackQueueDataSchema
+>
+
+// OAuth and authentication schemas
+export const messengerOAuthCallbackSchema = z.object({
+  code: z.string(),
+  state: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+})
+export type MessengerOAuthCallback = z.infer<
+  typeof messengerOAuthCallbackSchema
+>
+
+export const facebookAccessTokenResponseSchema = z.object({
+  access_token: z.string(),
+  token_type: z.literal("bearer"),
+  expires_in: z.number().optional(),
+})
+export type FacebookAccessTokenResponse = z.infer<
+  typeof facebookAccessTokenResponseSchema
+>
+
+// Integration response schemas
+export const messengerIntegrationResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string().optional(),
+  data: z.any().optional(),
+  error: z.string().optional(),
+})
+export type MessengerIntegrationResponse = z.infer<
+  typeof messengerIntegrationResponseSchema
+>
+
+// Select page request schema (for UI)
+export const selectPageRequestSchema = z.object({
+  pageId: z.string().min(1, "Please select a Facebook page"),
+  pageName: z.string().min(1, "Page name is required"),
+  accessToken: z.string().min(1, "Page access token is required"),
+})
+export type SelectPageRequest = z.infer<typeof selectPageRequestSchema>
+
+export const messengerProfileRequest = z.object({
+  get_started: z
+    .object({
+      payload: z.string(),
+    })
+    .optional(),
+  greeting: z
+    .array(
+      z.object({
+        locale: z.string(),
+        text: z.string(),
+      }),
+    )
+    .optional(),
+  persistent_menu: z
+    .array(
+      z.object({
+        locale: z.string(),
+        composer_input_disabled: z.boolean(),
+        call_to_actions: z.array(facebookButtonSchema).max(3).optional(),
+      }),
+    )
+    .optional(),
+  ice_breakers: z
+    .array(
+      z.object({
+        question: z.string(),
+        payload: z.string(),
+      }),
+    )
+    .optional(),
+})
+export type MessengerProfileRequest = z.infer<typeof messengerProfileRequest>
+
+export const personaRequest = z
+  .object({
+    name: z.string(),
+    profile_picture_url: z.string(),
+  })
+  .optional()
+export type PersonaRequest = z.infer<typeof personaRequest>

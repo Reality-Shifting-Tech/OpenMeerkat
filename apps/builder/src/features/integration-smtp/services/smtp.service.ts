@@ -1,0 +1,163 @@
+import {
+  connectChannelIntegration,
+  inboxService,
+  workspaceService,
+} from "@openmeerkat/business"
+import { OpenMeerkatException } from "@openmeerkat/business/errors"
+import { db, eq, findOrFail } from "@openmeerkat/database/client"
+import { channelTypes } from "@openmeerkat/database/partials"
+import { integrationSmtpModel } from "@openmeerkat/database/schema"
+import type { SmtpAuthValue } from "@openmeerkat/integration-smtp"
+import { smtpHostMap } from "@openmeerkat/integration-smtp"
+import { createSmtpTransporter } from "@openmeerkat/mail/transport"
+import { createId } from "@openmeerkat/utils"
+import { getTranslations } from "next-intl/server"
+import type { CreateSmtpRequest, UpdateSmtpRequest } from "../schemas/mutation"
+
+export async function verifySmtpConnection(input: CreateSmtpRequest) {
+  const t = await getTranslations()
+
+  const { host, port } =
+    input.provider === "other"
+      ? { host: input.host, port: input.port }
+      : smtpHostMap[input.provider]
+
+  const transporter = createSmtpTransporter({
+    host,
+    port,
+    username: input.username,
+    password: input.password,
+  })
+
+  try {
+    await transporter.verify()
+  } catch {
+    throw new OpenMeerkatException(t("smtp.errors.connectionFailed"))
+  } finally {
+    transporter.close()
+  }
+}
+
+export async function createSmtp(
+  workspaceId: string,
+  input: CreateSmtpRequest,
+) {
+  let { host, port, fromAddress, ...rest } = input
+  await verifySmtpConnection(input)
+
+  if (input.provider !== "other") {
+    const defaultHostAndPort = smtpHostMap[input.provider]
+    host = defaultHostAndPort.host
+    port = defaultHostAndPort.port
+  }
+
+  const workspace = await workspaceService.find({ where: { id: workspaceId } })
+  if (!workspace) {
+    throw new OpenMeerkatException("Workspace not found")
+  }
+
+  return db.transaction(async (tx) => {
+    const smtpId = createId()
+    const name = input.username
+
+    const { inbox } = await connectChannelIntegration({
+      tx,
+      ownerId: workspace.ownerId,
+      inboxData: {
+        id: smtpId,
+        workspaceId,
+        channel: channelTypes.enum.smtp,
+        name,
+        sourceId: smtpId,
+      },
+      insertIntegration: async (inboxId) => {
+        await tx.insert(integrationSmtpModel).values({
+          id: smtpId,
+          name,
+          workspaceId,
+          inboxId,
+          fromAddress,
+          auth: {
+            authType: "custom" as const,
+            ...rest,
+            host,
+            port,
+          },
+        })
+      },
+    })
+
+    return inbox
+  })
+}
+
+export async function updateSmtp(
+  workspaceId: string,
+  id: string,
+  input: UpdateSmtpRequest,
+) {
+  await verifySmtpConnection(input)
+
+  const integration = await findOrFail({
+    table: integrationSmtpModel,
+    where: { id, workspaceId },
+    message: "SMTP integration not found",
+  })
+
+  const currentAuth = integration.auth as SmtpAuthValue
+  const provider = input.provider ?? currentAuth.provider
+
+  let host = input.host || currentAuth.host
+  let port = input.port || currentAuth.port
+
+  if (provider !== "other") {
+    const defaults = smtpHostMap[provider]
+    host = defaults.host
+    port = defaults.port
+  }
+
+  const updatedAuth: SmtpAuthValue = {
+    authType: "custom",
+    provider,
+    host,
+    port,
+    username: input.username ?? currentAuth.username,
+    password: input.password ?? currentAuth.password,
+  }
+
+  const name = input.username ?? integration.name
+
+  return db
+    .update(integrationSmtpModel)
+    .set({ auth: updatedAuth, name, fromAddress: input.fromAddress })
+    .where(eq(integrationSmtpModel.id, integration.id))
+    .returning()
+    .then((result) => result[0])
+}
+
+export async function deleteSmtp(workspaceId: string, id: string) {
+  const [integration, workspace] = await Promise.all([
+    findOrFail({
+      table: integrationSmtpModel,
+      where: {
+        id,
+        workspaceId,
+      },
+      message: "SMTP integration not found",
+    }),
+    workspaceService.findById({ id: workspaceId }),
+  ])
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(integrationSmtpModel)
+      .where(eq(integrationSmtpModel.id, integration.id))
+
+    await inboxService.disconnect({
+      inboxId: integration.inboxId,
+      ownerId: workspace.ownerId,
+      workspaceId,
+      tx,
+    })
+  })
+}

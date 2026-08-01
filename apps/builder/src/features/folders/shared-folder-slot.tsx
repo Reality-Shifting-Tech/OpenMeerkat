@@ -1,0 +1,107 @@
+import {
+  type FolderType,
+  folderTypes,
+  rootFolderId,
+} from "@openmeerkat/database/partials"
+import type { FolderModel } from "@openmeerkat/database/types"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@openmeerkat/ui/components/ui/card"
+import { notFound } from "next/navigation"
+import { getTranslations } from "next-intl/server"
+import type { SearchParams } from "nuqs/server"
+import { Suspense } from "react"
+import { ListFolders } from "@/features/folders/list-folders"
+import { getCurrentFolder, listFolders } from "@/features/folders/queries"
+import { listFoldersSearchParams } from "@/features/folders/schema/query"
+import { getOriginUrlFromHeader } from "@/lib/domain"
+
+export default async function SharedFolderSlot(props: {
+  workspaceId: string
+  searchParams: Promise<SearchParams>
+}) {
+  const t = await getTranslations()
+
+  const originUrl = await getOriginUrlFromHeader()
+  const currentUrl = new URL(originUrl)
+  const featureName = currentUrl.pathname.split("/").pop()
+
+  let folderType: FolderType | null = null
+  switch (featureName) {
+    case "automated-responses":
+      folderType = folderTypes.enum.automatedResponse
+      break
+    case "sequences":
+      folderType = folderTypes.enum.sequence
+      break
+    case "flows":
+      folderType = folderTypes.enum.flow
+      break
+    case "bot-fields":
+    case "custom-fields":
+      folderType = folderTypes.enum.customField
+      break
+    case "tags":
+      folderType = folderTypes.enum.tag
+      break
+    case "triggers":
+      folderType = folderTypes.enum.trigger
+      break
+    case "webhooks":
+      folderType = folderTypes.enum.webhook
+      break
+    case "email-topics":
+      folderType = folderTypes.enum.emailTopic
+      break
+    case "fb-comments":
+      folderType = folderTypes.enum.fbComment
+      break
+    case "ig-comments":
+      folderType = folderTypes.enum.igComment
+      break
+    default:
+      break
+  }
+  if (!folderType) {
+    return notFound()
+  }
+
+  const searchParams = await props.searchParams
+  const { folderId } = await listFoldersSearchParams.parse(searchParams)
+
+  const promises = Promise.all([
+    folderId
+      ? getCurrentFolder({
+          id: folderId,
+          workspaceId: props.workspaceId,
+        })
+      : Promise.resolve({ folder: null, parents: [] as FolderModel[] }),
+    listFolders({
+      workspaceId: props.workspaceId,
+      folderType,
+      folderId: folderId ?? rootFolderId,
+    }),
+  ])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-bold text-xl">
+          {t("folders.heading.title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Suspense>
+          <ListFolders
+            folderType={folderType}
+            promises={promises}
+            workspaceId={props.workspaceId}
+          />
+        </Suspense>
+      </CardContent>
+    </Card>
+  )
+}

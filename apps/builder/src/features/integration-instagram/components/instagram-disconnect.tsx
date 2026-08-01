@@ -1,0 +1,50 @@
+"use client"
+
+import type { IntegrationInstagramModel } from "@openmeerkat/database/types"
+import { useParams, useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import { useAction } from "next-safe-action/hooks"
+import { useState } from "react"
+import { toast } from "sonner"
+import { DisconnectIntegrationDialog } from "@/features/common/components/disconnect-integration-dialog"
+import { disconnectInstagramAction } from "../actions/disconnect-instagram.action"
+
+export function InstagramDisconnect({
+  integrationInstagram,
+}: {
+  integrationInstagram: IntegrationInstagramModel
+}) {
+  const t = useTranslations()
+  const router = useRouter()
+  const [open, setOpen] = useState<boolean>(false)
+  const { workspaceId } = useParams<{ workspaceId: string }>()
+
+  const { executeAsync: onDisconnect, isPending: isPendingDisconnect } =
+    useAction(
+      disconnectInstagramAction.bind(
+        null,
+        workspaceId,
+        integrationInstagram.id,
+      ),
+      {
+        onSuccess: () => {
+          router.refresh()
+        },
+        onError: ({ error }) => {
+          if (error.serverError) {
+            toast.error(error.serverError)
+          }
+        },
+      },
+    )
+
+  return (
+    <DisconnectIntegrationDialog
+      featureLabel={t("fields.instagram.label")}
+      isPending={isPendingDisconnect}
+      onConfirm={onDisconnect}
+      onOpenChange={setOpen}
+      open={open}
+    />
+  )
+}

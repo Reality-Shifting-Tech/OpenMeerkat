@@ -1,0 +1,17 @@
+{
+  "extends": "@openmeerkat/typescript-config/nextjs.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@openmeerkat/ui/*": ["./src/*"]
+    },
+    "strictNullChecks": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "dist"]
+}

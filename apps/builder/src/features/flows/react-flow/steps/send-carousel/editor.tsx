@@ -1,0 +1,159 @@
+"use client"
+
+import { cardLayouts } from "@openmeerkat/database/partials"
+import { sendCardStepDefaultFn } from "@openmeerkat/flow-config"
+import {
+  SelectedSnapDisplay,
+  useSelectedSnapDisplay,
+} from "@openmeerkat/ui/components/carousel-snap"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Carousel,
+  type CarouselApi,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@openmeerkat/ui/components/ui/carousel"
+import { cn } from "@openmeerkat/ui/lib/utils"
+import {
+  PlusIcon,
+  RectangleHorizontalIcon,
+  RectangleVerticalIcon,
+  TrashIcon,
+} from "lucide-react"
+import { useTranslations } from "next-intl"
+import { useState } from "react"
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form"
+import SendCardStepEditor from "@/features/flows/react-flow/steps/send-card/editor"
+import { CarouselCardLinkNotice } from "./card-link-notice"
+
+type SendCarouselStepEditorProps = {
+  parentName: string
+}
+
+const SendCarouselStepEditor = (props: SendCarouselStepEditorProps) => {
+  const { parentName } = props
+  const t = useTranslations()
+
+  const [api, setApi] = useState<CarouselApi>()
+  const { selectedSnap, snapCount } = useSelectedSnapDisplay(api)
+
+  const { control, setValue } = useFormContext()
+  const { fields, append, insert, remove } = useFieldArray({
+    control,
+    name: `${parentName}.cards`,
+  })
+
+  const layout = useWatch({ name: `${parentName}.layout` })
+
+  const insertCard = () => {
+    const startIndex = selectedSnap
+
+    if (selectedSnap === snapCount - 1) {
+      append(sendCardStepDefaultFn())
+    } else {
+      insert(selectedSnap + 1, sendCardStepDefaultFn())
+    }
+
+    if (api) {
+      api.reInit()
+      api.scrollTo(startIndex, true)
+    }
+  }
+
+  const removeCard = () => {
+    remove(selectedSnap)
+
+    if (api) {
+      api.reInit()
+    }
+  }
+
+  return (
+    <div className="relative pe-3">
+      <div className="absolute start-3 top-2 z-1 flex items-center gap-1 rounded-full bg-white px-2 py-1 dark:bg-neutral-500!">
+        <Button
+          className={cn(
+            "size-6 p-0!",
+            layout === cardLayouts.enum.horizontal ? "text-destructive" : "",
+          )}
+          onClick={() =>
+            setValue(`${parentName}.layout`, cardLayouts.enum.horizontal)
+          }
+          size="icon"
+          variant="ghost"
+        >
+          <RectangleHorizontalIcon />
+        </Button>
+        <Button
+          className={cn(
+            "size-6 p-0!",
+            layout === cardLayouts.enum.vertical ? "text-destructive" : "",
+          )}
+          onClick={() =>
+            setValue(`${parentName}.layout`, cardLayouts.enum.vertical)
+          }
+          size="icon"
+          variant="ghost"
+        >
+          <RectangleVerticalIcon />
+        </Button>
+      </div>
+
+      <Carousel opts={{ loop: false }} setApi={setApi}>
+        <CarouselContent>
+          {fields.map((field, index) => (
+            <CarouselItem key={field.id}>
+              <SendCardStepEditor parentName={`${parentName}.cards.${index}`} />
+              <CarouselCardLinkNotice
+                cardName={`${parentName}.cards.${index}`}
+              />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+
+        <div className="absolute -end-3 top-1/2 flex -translate-y-1/2 flex-col gap-2">
+          <Button
+            className="size-6 cursor-pointer rounded-full"
+            data-slot="carousel-add"
+            disabled={fields.length >= 10}
+            onClick={insertCard}
+            type="button"
+          >
+            <PlusIcon />
+            <span className="sr-only">{t("flows.sendCarousel.addSlide")}</span>
+          </Button>
+
+          <Button
+            className="size-6 cursor-pointer rounded-full"
+            data-slot="carousel-remove"
+            disabled={fields.length <= 1}
+            onClick={removeCard}
+            type="button"
+            variant="destructive"
+          >
+            <TrashIcon />
+            <span className="sr-only">
+              {t("flows.sendCarousel.removeSlide")}
+            </span>
+          </Button>
+        </div>
+
+        <div className="mt-1 flex items-center gap-1">
+          <div className="flex flex-1 gap-1">
+            <CarouselPrevious className="static top-0 translate-y-0" />
+            <CarouselNext className="static top-0 translate-y-0" />
+          </div>
+
+          <SelectedSnapDisplay
+            selectedSnap={selectedSnap}
+            snapCount={snapCount}
+          />
+        </div>
+      </Carousel>
+    </div>
+  )
+}
+
+export default SendCarouselStepEditor

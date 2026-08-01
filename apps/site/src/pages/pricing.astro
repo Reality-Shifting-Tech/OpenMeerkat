@@ -1,0 +1,146 @@
+---
+const GITHUB = "https://github.com/Reality-Shifting-Tech/OpenMeerkat"
+const CONTACT = "mailto:elias@realityshifting.tech"
+
+const tiers = [
+  {
+    name: "Open Source",
+    tagline: "Free forever",
+    price: "$0",
+    per: "self-hosted",
+    desc: "The complete community edition under AGPL-3.0. Run it on your own hardware with no license fees, no feature gates, and no per-seat pricing.",
+    cta: { label: "Star on GitHub", href: GITHUB },
+    points: [
+      "AGPL-3.0, free forever",
+      "All community features: inbox, flows, AI agents, broadcasts, webhooks, API, CLI, MCP",
+      "Self-host on your own infrastructure",
+      "Community support through GitHub issues",
+    ],
+  },
+  {
+    name: "Managed Setup",
+    tagline: "We run it for you",
+    price: "$499",
+    per: "one-time + $99/mo",
+    desc: "We deploy your instance on managed infrastructure and keep it running: upgrades, backups, and monitoring included. The license stays AGPL-3.0 and your data stays yours.",
+    cta: { label: "Contact us", href: CONTACT },
+    featured: true,
+    points: [
+      "One-time deployment and migration",
+      "Managed hosting at $99 per month",
+      "Automatic upgrades and patches",
+      "Nightly backups with restore",
+      "Uptime monitoring and alerting",
+      "Email support with a human",
+    ],
+  },
+  {
+    name: "Enterprise",
+    tagline: "Custom scope",
+    price: "Custom",
+    per: "contact us",
+    desc: "Larger deployments, custom builds on the open core, on-premise contracts, and support SLAs. Tell us what you need and we will scope it.",
+    cta: { label: "Email us", href: CONTACT },
+    points: [
+      "Custom deployments and on-premise",
+      "White-glove migration",
+      "Support SLAs",
+      "Consulting on the open core",
+    ],
+  },
+]
+
+const faqs = [
+  {
+    q: "Is the managed plan a license?",
+    a: "No. It is a service contract for deployment, hosting, and operations. The software remains AGPL-3.0 and you keep full access to your data at all times.",
+  },
+  {
+    q: "What happens if I stop paying?",
+    a: "You keep the software. You lose the hosting, upgrades, backups, and support. You can export your data at any time, including after cancellation.",
+  },
+  {
+    q: "Can I migrate between self-host and managed?",
+    a: "Yes. Migration into managed is part of the one-time setup. Migration out is an export: the platform is your software, so you can run it wherever you like.",
+  },
+]
+---
+
+<Layout
+  title="Pricing | OpenMeerkat"
+  description="OpenMeerkat pricing: the software is AGPL-3.0 and free forever. Pay only if you want us to host, upgrade, back up, and monitor it for you."
+>
+  <section class="page-hero">
+    <div class="wrap">
+      <p class="kicker">Pricing</p>
+      <h1>Free software, honestly priced.</h1>
+      <p class="lede">
+        The code is free and will stay free. You pay only for what you cannot
+        or will not run yourself: setup, hosting, upgrades, and a human on
+        call. No per-seat pricing, no usage meters, no surprises.
+      </p>
+    </div>
+  </section>
+
+  <section class="pricing-section">
+    <div class="wrap">
+      <div class="pricing">
+        {
+          tiers.map((t) => (
+            <div class:list={["tier", { featured: t.featured }]}>
+              <div class="tier-top">
+                <div>
+                  <p class="tier-name">{t.name}</p>
+                  <p class="tier-tagline">{t.tagline}</p>
+                </div>
+                {t.featured && <span class="tier-badge">Most common</span>}
+              </div>
+              <p class="tier-desc">{t.desc}</p>
+              <p class="price">{t.price}</p>
+              <p class="per">{t.per}</p>
+              <ul>
+                {t.points.map((p) => <li>{p}</li>)}
+              </ul>
+              <a class:list={["btn", t.featured ? "primary" : "ghost"]} href={t.cta.href}>{t.cta.label}</a>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="section-head" style="margin-top: 72px">
+        <h2>Why we charge for managed and not for code.</h2>
+        <p class="sub">
+          Chat infrastructure should be owned, not rented. We charge for what
+          we actually do: deploying your instance, running it, upgrading it,
+          backing it up, and being on call when something breaks. If you can
+          run it yourself, you should, and you pay nothing.
+        </p>
+      </div>
+
+      <div class="faq">
+        {
+          faqs.map((f) => (
+            <div class="faq-item">
+              <p class="q">{f.q}</p>
+              <p>{f.a}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Not sure which tier fits?</h2>
+      <p>
+        Email us and we will help you decide. There is no sales team, no
+        demo-first funnel: just a reply from the people who build it.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href={CONTACT}>Email us</a>
+        <a class="btn primary dark" href="/docs">Read the quickstart</a>
+      </div>
+    </div>
+  </section>
+</Layout>

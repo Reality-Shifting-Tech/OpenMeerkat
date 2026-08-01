@@ -1,0 +1,35 @@
+{
+  "name": "@openmeerkat/analytics",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./events": "./src/events.ts",
+    "./queries": "./src/queries.ts",
+    "./schemas": "./src/schemas/index.ts"
+  },
+  "dependencies": {
+    "@openmeerkat/database": "workspace:*",
+    "@openmeerkat/flow-config": "workspace:*",
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "@openmeerkat/redis": "workspace:*",
+    "@openmeerkat/utils": "workspace:*",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "ioredis": "5.10.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.23.0",
+    "vitest": "^4.1.0"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

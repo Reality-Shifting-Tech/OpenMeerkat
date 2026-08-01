@@ -1,0 +1,34 @@
+{
+  "name": "@openmeerkat/variables",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "author": "Michael Truong <realcodesiman@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@openmeerkat/encryption": "workspace:*",
+    "@openmeerkat/database": "workspace:*",
+    "@openmeerkat/integration-instagram": "workspace:*",
+    "@openmeerkat/integration-messenger": "workspace:*",
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/redis": "workspace:*",
+    "@openmeerkat/business": "workspace:*",
+    "@openmeerkat/utils": "workspace:*",
+    "date-fns-tz": "^3.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "~24.12.2",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

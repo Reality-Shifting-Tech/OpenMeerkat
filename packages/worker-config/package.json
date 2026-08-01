@@ -1,0 +1,35 @@
+{
+  "name": "@openmeerkat/worker-config",
+  "version": "0.1.0",
+  "type": "module",
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@openmeerkat/analytics": "workspace:*",
+    "@openmeerkat/database": "workspace:*",
+    "@openmeerkat/flow-config": "workspace:*",
+    "@openmeerkat/kafka": "workspace:*",
+    "@openmeerkat/redis": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "@t3-oss/env-nextjs": "^0.13.11",
+    "@types/node": "^24.10.4",
+    "bullmq": "^5.76.4",
+    "ioredis": "5.10.1",
+    "zod": "^4.3.6"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./contact-pii": "./src/lib/contact-pii.ts",
+    "./keys": "./src/keys.ts",
+    "./message-queue/factory": "./src/message-queue/factory.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

@@ -1,0 +1,170 @@
+import { activeCampaignSyncContactSchema } from "./steps/active-campaign-sync-contact"
+import { addContactNotesStepSchema } from "./steps/add-contact-notes"
+import { addContactTagStepSchema } from "./steps/add-contact-tag"
+import { aiAnalyzeImageSchema } from "./steps/ai-analyze-image"
+import { aiDeleteMessageHistorySchema } from "./steps/ai-delete-message-history"
+import { aiEditImageSchema } from "./steps/ai-edit-image"
+import { aiExtractDataSchema } from "./steps/ai-extract-data"
+import { aiGenerateImageSchema } from "./steps/ai-generate-image"
+import { aiGenerateTextSchema } from "./steps/ai-generate-text"
+import { aiGenerateTextAgentSchema } from "./steps/ai-generate-text-agent"
+import { aiSpeechToTextSchema } from "./steps/ai-speech-to-text"
+import { aiTextToSpeechSchema } from "./steps/ai-text-to-speech"
+import { archiveConversationStepSchema } from "./steps/archive-conversation"
+import { assignConversationStepSchema } from "./steps/assign-conversation"
+import { autoAssignConversationStepSchema } from "./steps/auto-assign-conversation"
+import { blockContactStepSchema } from "./steps/block-contact"
+import { clearCustomFieldStepSchema } from "./steps/clear-custom-field"
+import { countCharactersStepSchema } from "./steps/count-characters"
+import { markCouponUsedStepSchema, setUpCouponStepSchema } from "./steps/coupon"
+import { deleteContactStepSchema } from "./steps/delete-contact"
+import { disableBotStepSchema } from "./steps/disable-bot"
+import { disableMessengerComposerStepSchema } from "./steps/disable-messenger-composer"
+import { dripSubscribeSubscriberSchema } from "./steps/drip-subscribe-subscriber"
+import { enableBotStepSchema } from "./steps/enable-bot"
+import { enableMessengerComposerStepSchema } from "./steps/enable-messenger-composer"
+import { externalRequestStepSchema } from "./steps/external-request"
+import { facebookCustomAudienceSchema } from "./steps/facebook-custom-audience"
+import { followConversationStepSchema } from "./steps/follow-conversation"
+import { formatDateStepSchema } from "./steps/format-date"
+import { generateCodeStepSchema } from "./steps/generate-code"
+import { getDataFromJsonStepSchema } from "./steps/get-data-from-json"
+import { getResponseAddContactSchema } from "./steps/get-response-add-contact"
+import { klaviyoSyncProfileSchema } from "./steps/klaviyo-sync-profile"
+import { mailchimpAddMemberSchema } from "./steps/mailchimp-add-member"
+import { mailerLiteAddSubscriberSchema } from "./steps/mailer-lite-add-subscriber"
+import { makeStepSchema } from "./steps/make"
+import { markEmailVerifiedStepSchema } from "./steps/mark-email-verified"
+import { moosendCreateContactSchema } from "./steps/moosend-create-contact"
+import { optInEmailStepSchema } from "./steps/opt-in-email"
+import { optOutEmailStepSchema } from "./steps/opt-out-email"
+import { questionnairesStepSchema } from "./steps/questionnaires"
+import { removeContactTagStepSchema } from "./steps/remove-contact-tag"
+import { sendGridAddContactSchema } from "./steps/sendgrid-add-contact"
+import { setCustomFieldStepSchema } from "./steps/set-custom-field"
+import { setMessengerPersonaStepSchema } from "./steps/set-messenger-persona"
+import { setMessengerUserPersistentMenuStepSchema } from "./steps/set-messenger-user-persistent-menu"
+import { spreadsheetClearRowSchema } from "./steps/spreadsheet-clear-row"
+import { spreadsheetGetRowSchema } from "./steps/spreadsheet-get-row"
+import { spreadsheetGetRandomRowSchema } from "./steps/spreadsheet-random-row"
+import { spreadsheetSendDataSchema } from "./steps/spreadsheet-send-data"
+import { spreadsheetUpdateRowSchema } from "./steps/spreadsheet-update-row"
+import { startAnotherNodeStepSchema } from "./steps/start-another-node"
+import { startExternalFlowStepSchema } from "./steps/start-external-flow"
+import { startExternalNodeStepSchema } from "./steps/start-external-node"
+import { subscribeBroadcastStepSchema } from "./steps/subscribe-broadcast"
+import { subscribeSequenceStepSchema } from "./steps/subscribe-sequence"
+import { unarchiveConversationStepSchema } from "./steps/unarchive-conversation"
+import { unassignConversationStepSchema } from "./steps/unassign-conversation"
+import { unfollowConversationStepSchema } from "./steps/unfollow-conversation"
+import { unsubscribeBroadcastStepSchema } from "./steps/unsubscribe-broadcast"
+import { unsubscribeSequenceStepSchema } from "./steps/unsubscribe-sequence"
+import { updateMessengerContactDataStepSchema } from "./steps/update-messenger-contact-data"
+
+const inboxSteps = [
+  enableBotStepSchema,
+  disableBotStepSchema,
+  assignConversationStepSchema,
+  autoAssignConversationStepSchema,
+  unassignConversationStepSchema,
+  followConversationStepSchema,
+  unfollowConversationStepSchema,
+  archiveConversationStepSchema,
+  unarchiveConversationStepSchema,
+]
+
+const contactSteps = [
+  addContactNotesStepSchema,
+  blockContactStepSchema,
+  addContactTagStepSchema,
+  removeContactTagStepSchema,
+  setCustomFieldStepSchema,
+  clearCustomFieldStepSchema,
+  deleteContactStepSchema,
+  questionnairesStepSchema,
+  setUpCouponStepSchema,
+  markCouponUsedStepSchema,
+]
+
+const broadcastSteps = [
+  subscribeBroadcastStepSchema,
+  unsubscribeBroadcastStepSchema,
+]
+
+const sequenceSteps = [
+  subscribeSequenceStepSchema,
+  unsubscribeSequenceStepSchema,
+]
+
+const toolSteps = [
+  getDataFromJsonStepSchema,
+  formatDateStepSchema,
+  generateCodeStepSchema,
+  countCharactersStepSchema,
+  externalRequestStepSchema,
+]
+
+const triggerSteps = [makeStepSchema]
+
+const emailSteps = [
+  markEmailVerifiedStepSchema,
+  optInEmailStepSchema,
+  optOutEmailStepSchema,
+  activeCampaignSyncContactSchema,
+  getResponseAddContactSchema,
+  mailchimpAddMemberSchema,
+  mailerLiteAddSubscriberSchema,
+  moosendCreateContactSchema,
+  dripSubscribeSubscriberSchema,
+  sendGridAddContactSchema,
+  klaviyoSyncProfileSchema,
+]
+
+const flowSteps = [
+  startAnotherNodeStepSchema,
+  startExternalFlowStepSchema,
+  startExternalNodeStepSchema,
+]
+
+const aiSteps = [
+  aiGenerateTextSchema,
+  aiGenerateImageSchema,
+  aiDeleteMessageHistorySchema,
+  aiEditImageSchema,
+  aiAnalyzeImageSchema,
+  aiGenerateTextAgentSchema,
+  aiExtractDataSchema,
+  aiSpeechToTextSchema,
+  aiTextToSpeechSchema,
+]
+
+const messengerSteps = [
+  facebookCustomAudienceSchema,
+  setMessengerUserPersistentMenuStepSchema,
+  enableMessengerComposerStepSchema,
+  disableMessengerComposerStepSchema,
+  setMessengerPersonaStepSchema,
+  updateMessengerContactDataStepSchema,
+]
+
+const googleSheetStep = [
+  spreadsheetGetRowSchema,
+  spreadsheetClearRowSchema,
+  spreadsheetGetRandomRowSchema,
+  spreadsheetSendDataSchema,
+  spreadsheetUpdateRowSchema,
+]
+
+export const actionSteps = [
+  ...inboxSteps,
+  ...contactSteps,
+  ...broadcastSteps,
+  ...sequenceSteps,
+  ...toolSteps,
+  ...emailSteps,
+  ...flowSteps,
+  ...aiSteps,
+  ...googleSheetStep,
+  ...messengerSteps,
+  ...triggerSteps,
+]

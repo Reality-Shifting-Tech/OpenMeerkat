@@ -1,0 +1,362 @@
+import { z } from "zod"
+
+export const credentialTypes = z.enum([
+  "whatsapp",
+  "messenger",
+  "instagram",
+  "instagramFacebook",
+  "google",
+  "zalo",
+  "giphy",
+  "stripe",
+  "smtp",
+  "paddle",
+  "tiktok",
+  "make",
+])
+export type CredentialType = z.infer<typeof credentialTypes>
+
+// ─── Per-provider full credential schemas (every field, public + secret) ─────
+// `value` stores the full object encrypted. `publicConfig` is a `.pick()`
+// projection of the same fields that are safe to read without decrypting.
+
+export const whatsappCredentialSchema = z.object({
+  clientId: z.string(),
+  version: z.string(),
+  configId: z.string(),
+  systemUserId: z.string(),
+  businessId: z.string().optional(),
+  businessName: z.string(),
+  verifyToken: z.string(),
+  clientSecret: z.string(),
+  systemUserToken: z.string(),
+})
+export type WhatsappCredential = z.infer<typeof whatsappCredentialSchema>
+
+export const whatsappCredentialPublicSchema = whatsappCredentialSchema.pick({
+  clientId: true,
+  version: true,
+  configId: true,
+  systemUserId: true,
+  businessId: true,
+  businessName: true,
+  verifyToken: true,
+})
+export type WhatsappCredentialPublic = z.infer<
+  typeof whatsappCredentialPublicSchema
+>
+
+export const messengerCredentialSchema = z.object({
+  clientId: z.string(),
+  version: z.string(),
+  verifyToken: z.string(),
+  clientSecret: z.string(),
+})
+export type MessengerCredential = z.infer<typeof messengerCredentialSchema>
+
+export const messengerCredentialPublicSchema = messengerCredentialSchema.pick({
+  clientId: true,
+  version: true,
+  verifyToken: true,
+})
+export type MessengerCredentialPublic = z.infer<
+  typeof messengerCredentialPublicSchema
+>
+
+export const instagramCredentialSchema = z.object({
+  clientId: z.string(),
+  version: z.string(),
+  verifyToken: z.string(),
+  clientSecret: z.string(),
+})
+export type InstagramCredential = z.infer<typeof instagramCredentialSchema>
+
+export const instagramCredentialPublicSchema = instagramCredentialSchema.pick({
+  clientId: true,
+  version: true,
+  verifyToken: true,
+})
+export type InstagramCredentialPublic = z.infer<
+  typeof instagramCredentialPublicSchema
+>
+
+export const instagramFacebookCredentialSchema = instagramCredentialSchema
+export type InstagramFacebookCredential = InstagramCredential
+
+export const instagramFacebookCredentialPublicSchema =
+  instagramCredentialPublicSchema
+export type InstagramFacebookCredentialPublic = InstagramCredentialPublic
+
+export const googleCredentialSchema = z.object({
+  clientId: z.string(),
+  clientSecret: z.string(),
+  verifyToken: z.string(),
+})
+export type GoogleCredential = z.infer<typeof googleCredentialSchema>
+
+export const googleCredentialPublicSchema = googleCredentialSchema.pick({
+  clientId: true,
+})
+export type GoogleCredentialPublic = z.infer<
+  typeof googleCredentialPublicSchema
+>
+
+export const zaloCredentialSchema = z.object({
+  clientId: z.string(),
+  version: z.string(),
+  verifyToken: z.string(),
+  clientSecret: z.string(),
+})
+export type ZaloCredential = z.infer<typeof zaloCredentialSchema>
+
+export const zaloCredentialPublicSchema = zaloCredentialSchema.pick({
+  clientId: true,
+  version: true,
+  verifyToken: true,
+})
+export type ZaloCredentialPublic = z.infer<typeof zaloCredentialPublicSchema>
+
+export const giphyCredentialSchema = z.object({
+  apiKey: z.string(),
+})
+export type GiphyCredential = z.infer<typeof giphyCredentialSchema>
+
+export const giphyCredentialPublicSchema = giphyCredentialSchema.pick({})
+export type GiphyCredentialPublic = z.infer<typeof giphyCredentialPublicSchema>
+
+export const stripeCredentialSchema = z.object({
+  publishableKey: z.string(),
+  verifyToken: z.string(),
+  secretKey: z.string(),
+  connectClientId: z.string().optional(),
+})
+export type StripeCredential = z.infer<typeof stripeCredentialSchema>
+
+export const stripeCredentialPublicSchema = stripeCredentialSchema.pick({
+  publishableKey: true,
+  verifyToken: true,
+  connectClientId: true,
+})
+export type StripeCredentialPublic = z.infer<
+  typeof stripeCredentialPublicSchema
+>
+
+export const smtpCredentialSchema = z.object({
+  host: z.string(),
+  port: z.number().int().positive(),
+  username: z.string(),
+  password: z.string(),
+  fromEmail: z.string().email(),
+  fromName: z.string().optional(),
+})
+export type SmtpCredential = z.infer<typeof smtpCredentialSchema>
+
+export const smtpCredentialPublicSchema = smtpCredentialSchema.omit({
+  password: true,
+})
+export type SmtpCredentialPublic = z.infer<typeof smtpCredentialPublicSchema>
+
+export const paddleCredentialSchema = z.object({
+  vendorId: z.string(),
+  vendorAuthCode: z.string(),
+  publicKey: z.string().optional(),
+  verifyToken: z.string().optional(),
+})
+export type PaddleCredential = z.infer<typeof paddleCredentialSchema>
+
+export const paddleCredentialPublicSchema = paddleCredentialSchema.pick({
+  vendorId: true,
+})
+export type PaddleCredentialPublic = z.infer<
+  typeof paddleCredentialPublicSchema
+>
+
+export const tiktokCredentialSchema = z.object({
+  clientId: z.string(),
+  clientSecret: z.string(),
+})
+export type TiktokCredential = z.infer<typeof tiktokCredentialSchema>
+
+export const tiktokCredentialPublicSchema = tiktokCredentialSchema.pick({
+  clientId: true,
+})
+export type TiktokCredentialPublic = z.infer<
+  typeof tiktokCredentialPublicSchema
+>
+
+export const makeCredentialSchema = z.object({
+  inviteUrl: z.string().url(),
+})
+export type MakeCredential = z.infer<typeof makeCredentialSchema>
+
+export const makeCredentialPublicSchema = makeCredentialSchema.pick({
+  inviteUrl: true,
+})
+export type MakeCredentialPublic = z.infer<typeof makeCredentialPublicSchema>
+
+export const credentialSchemas = {
+  whatsapp: whatsappCredentialSchema,
+  messenger: messengerCredentialSchema,
+  instagram: instagramCredentialSchema,
+  instagramFacebook: instagramFacebookCredentialSchema,
+  google: googleCredentialSchema,
+  zalo: zaloCredentialSchema,
+  giphy: giphyCredentialSchema,
+  stripe: stripeCredentialSchema,
+  smtp: smtpCredentialSchema,
+  paddle: paddleCredentialSchema,
+  tiktok: tiktokCredentialSchema,
+  make: makeCredentialSchema,
+} as const
+
+export const credentialPublicSchemas = {
+  whatsapp: whatsappCredentialPublicSchema,
+  messenger: messengerCredentialPublicSchema,
+  instagram: instagramCredentialPublicSchema,
+  instagramFacebook: instagramFacebookCredentialPublicSchema,
+  google: googleCredentialPublicSchema,
+  zalo: zaloCredentialPublicSchema,
+  giphy: giphyCredentialPublicSchema,
+  stripe: stripeCredentialPublicSchema,
+  smtp: smtpCredentialPublicSchema,
+  paddle: paddleCredentialPublicSchema,
+  tiktok: tiktokCredentialPublicSchema,
+  make: makeCredentialPublicSchema,
+} as const
+
+export type CredentialByType = {
+  whatsapp: WhatsappCredential
+  messenger: MessengerCredential
+  instagram: InstagramCredential
+  instagramFacebook: InstagramFacebookCredential
+  google: GoogleCredential
+  zalo: ZaloCredential
+  giphy: GiphyCredential
+  stripe: StripeCredential
+  smtp: SmtpCredential
+  paddle: PaddleCredential
+  tiktok: TiktokCredential
+  make: MakeCredential
+}
+
+export type CredentialPublicByType = {
+  whatsapp: WhatsappCredentialPublic
+  messenger: MessengerCredentialPublic
+  instagram: InstagramCredentialPublic
+  instagramFacebook: InstagramFacebookCredentialPublic
+  google: GoogleCredentialPublic
+  zalo: ZaloCredentialPublic
+  giphy: GiphyCredentialPublic
+  stripe: StripeCredentialPublic
+  smtp: SmtpCredentialPublic
+  paddle: PaddleCredentialPublic
+  tiktok: TiktokCredentialPublic
+  make: MakeCredentialPublic
+}
+
+// ─── Update schemas (credential fields required except deliberate optionals) ─
+
+export const whatsappCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  configId: z.string().trim().min(1),
+  systemUserId: z.string().trim().min(1),
+  businessId: z.string().trim().optional(),
+  businessName: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+  systemUserToken: z.string().trim().min(1),
+})
+export type WhatsappCredentialUpdate = z.infer<
+  typeof whatsappCredentialUpdateSchema
+>
+
+export const messengerCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+})
+export type MessengerCredentialUpdate = z.infer<
+  typeof messengerCredentialUpdateSchema
+>
+
+export const instagramCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+})
+export type InstagramCredentialUpdate = z.infer<
+  typeof instagramCredentialUpdateSchema
+>
+
+export const instagramFacebookCredentialUpdateSchema =
+  instagramCredentialUpdateSchema
+export type InstagramFacebookCredentialUpdate = InstagramCredentialUpdate
+
+export const googleCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1),
+})
+export type GoogleCredentialUpdate = z.infer<
+  typeof googleCredentialUpdateSchema
+>
+
+export const zaloCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+})
+export type ZaloCredentialUpdate = z.infer<typeof zaloCredentialUpdateSchema>
+
+export const giphyCredentialUpdateSchema = z.object({
+  apiKey: z.string().trim().optional(),
+})
+export type GiphyCredentialUpdate = z.infer<typeof giphyCredentialUpdateSchema>
+
+export const stripeCredentialUpdateSchema = z.object({
+  publishableKey: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1),
+  secretKey: z.string().trim().min(1),
+})
+export type StripeCredentialUpdate = z.infer<
+  typeof stripeCredentialUpdateSchema
+>
+
+export const smtpCredentialUpdateSchema = z.object({
+  host: z.string().trim().min(1),
+  port: z.coerce.number().int().positive(),
+  username: z.string().trim().min(1),
+  password: z.string().trim().optional(),
+  fromEmail: z.string().trim().min(1).email(),
+  fromName: z.string().trim().optional(),
+})
+export type SmtpCredentialUpdate = z.infer<typeof smtpCredentialUpdateSchema>
+
+export const tiktokCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+})
+export type TiktokCredentialUpdate = z.infer<
+  typeof tiktokCredentialUpdateSchema
+>
+
+export const makeCredentialUpdateSchema = z.object({
+  inviteUrl: z.string().trim().min(1).url(),
+})
+export type MakeCredentialUpdate = z.infer<typeof makeCredentialUpdateSchema>
+
+// ─── Encrypted blob shape stored in Credential.value ─────────────────────────
+
+export const credentialEncryptedSchema = z.object({
+  v: z.literal(1),
+  kid: z.string().optional(),
+  iv: z.string(),
+  text: z.string(),
+  tag: z.string(),
+  aad: z.string().optional(),
+})
+export type CredentialEncrypted = z.infer<typeof credentialEncryptedSchema>

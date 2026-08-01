@@ -1,0 +1,51 @@
+import type { TagModel } from "@openmeerkat/database/types"
+import { getSortingStateParser } from "@openmeerkat/ui/lib/parsers"
+import { zodBigintAsString } from "@openmeerkat/utils"
+import {
+  createSearchParamsCache,
+  parseAsInteger,
+  parseAsString,
+} from "nuqs/server"
+import z from "zod"
+import { parseAsBigInt } from "@/lib/nuqs"
+import { basePaginationRequest } from "@/lib/pagination"
+import { publicTagResource, tagResource } from "./resource"
+
+export const listTagsSearchParams = {
+  page: parseAsInteger,
+  perPage: parseAsInteger,
+  name: parseAsString,
+  sort: getSortingStateParser<
+    TagModel & { contactsCount?: number }
+  >().withDefault([{ id: "createdAt", desc: true }]),
+  folderId: parseAsBigInt,
+}
+export const listTagsSearchParamsCache =
+  createSearchParamsCache(listTagsSearchParams)
+
+export const listTagsRequest = basePaginationRequest.and(
+  z.object({
+    name: z.string().nullish(),
+    folderId: zodBigintAsString().nullish(),
+    workspaceId: zodBigintAsString(),
+  }),
+)
+export type ListTagsRequest = z.infer<typeof listTagsRequest>
+
+export const listTagsResponse = z.object({
+  data: z.array(tagResource),
+  pageCount: z.number().int(),
+})
+export type ListTagsResponse = z.infer<typeof listTagsResponse>
+
+export const publicListTagsResponse = z.object({
+  data: z.array(publicTagResource),
+})
+export type ListPublicTagResponse = z.infer<typeof publicListTagsResponse>
+
+export const findTagRequest = z.object({
+  key: z.string(),
+  folderId: zodBigintAsString().nullish(),
+  workspaceId: zodBigintAsString(),
+})
+export type FindTagRequest = z.infer<typeof findTagRequest>

@@ -1,0 +1,36 @@
+import { OpenMeerkatException } from "@openmeerkat/business/errors"
+import { NextResponse } from "next/server"
+import { z } from "zod"
+
+export function serverErrorHandler(error: unknown, headers?: Headers) {
+  if (error instanceof z.ZodError) {
+    const errors = error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      message: issue.message,
+    }))
+
+    return NextResponse.json(
+      { message: "Validation error", errors },
+      { status: 422, headers },
+    )
+  }
+
+  if (error instanceof OpenMeerkatException) {
+    return NextResponse.json(
+      { message: error.message, errors: [] },
+      { status: error.httpStatusCode, headers },
+    )
+  }
+
+  if (error instanceof Error) {
+    return NextResponse.json(
+      { message: error.message, errors: [] },
+      { status: 400, headers },
+    )
+  }
+
+  return NextResponse.json(
+    { message: "Unknown error", errors: [] },
+    { status: 500, headers },
+  )
+}

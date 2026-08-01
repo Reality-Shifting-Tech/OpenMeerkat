@@ -1,0 +1,106 @@
+import type { SelectOption } from "@openmeerkat/ui/components/form/select-field"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@openmeerkat/ui/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@openmeerkat/ui/components/ui/popover"
+import { PlusCircleIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
+import { useEffect, useState } from "react"
+import { CreateCustomFieldDialog } from "./create-custom-field"
+import { useCustomFieldSelectOptions } from "./provider/custom-field-hook"
+import { useCustomFieldStore } from "./provider/custom-field-store-context"
+
+type ContactCustomFieldManageProps = {
+  workspaceId: string
+  disabledIds: string[]
+  onChooseCustomField: (customFieldId: string) => void
+}
+
+export function ContactCustomFieldManage({
+  workspaceId,
+  disabledIds = [],
+  onChooseCustomField,
+}: ContactCustomFieldManageProps) {
+  const t = useTranslations()
+
+  const [open, setOpen] = useState(false)
+  const [options, setOptions] = useState<SelectOption[]>([])
+
+  const { getAllCustomFields } = useCustomFieldStore((state) => state)
+  const customFieldOptions = useCustomFieldSelectOptions({
+    includeReserved: false,
+  })
+
+  useEffect(() => {
+    const filteredOptions = customFieldOptions.filter(
+      (option) => !disabledIds.includes(option.value),
+    )
+    setOptions(filteredOptions)
+  }, [customFieldOptions, disabledIds])
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger
+        render={
+          <Button
+            className="flex cursor-pointer justify-start px-0!"
+            variant="link"
+          >
+            <PlusCircleIcon />
+            {t("actions.addFeature", {
+              feature: t("fields.customField.label"),
+            })}
+          </Button>
+        }
+      />
+      <PopoverContent>
+        <div className="mb-3 flex items-center">
+          <p className="flex-1 font-medium">{t("fields.customField.label")}</p>
+          <CreateCustomFieldDialog
+            folderId={null}
+            onSuccess={() => {
+              getAllCustomFields()
+              setOpen(false)
+            }}
+            triggerButton={
+              <Button size="sm" type="button" variant="outline">
+                <PlusCircleIcon />
+                {t("actions.add")}
+              </Button>
+            }
+            workspaceId={workspaceId}
+          />
+        </div>
+
+        <Command className="rounded-lg border">
+          <CommandInput className="h-9" placeholder={t("actions.search")} />
+          <CommandList>
+            <CommandEmpty>{t("actions.noRecordFound")}</CommandEmpty>
+            {options.map((option) => (
+              <CommandItem
+                key={option.value}
+                onSelect={() => {
+                  onChooseCustomField(option.value)
+                  setOpen(false)
+                }}
+                value={option.value}
+              >
+                {option.icon && <option.icon className="h-4 w-4" />}
+                {option.label}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}

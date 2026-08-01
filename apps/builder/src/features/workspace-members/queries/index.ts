@@ -1,0 +1,89 @@
+"use server"
+
+import { db, relationsFilterToSQL } from "@openmeerkat/database/client"
+import { workspaceMemberModel } from "@openmeerkat/database/schema"
+import {
+  getPaginationWithDefaults,
+  likeContains,
+} from "@openmeerkat/database/utils"
+import { assertCurrentUserCanAccessChatbot } from "@/lib/auth/utils"
+import type {
+  GetWorkspaceMemberRequest,
+  GetWorkspaceMemberResponse,
+  ListWorkspaceMembersRequest,
+  ListWorkspaceMembersResponse,
+} from "../schema/query"
+import type { WorkspaceMemberResource } from "../schema/resource"
+
+export async function listWorkspaceMembers(
+  input: ListWorkspaceMembersRequest,
+): Promise<ListWorkspaceMembersResponse> {
+  await assertCurrentUserCanAccessChatbot(input.workspaceId)
+
+  const pagination = getPaginationWithDefaults(input)
+
+  const where = {
+    workspaceId: input.workspaceId,
+    user: input.keyword
+      ? {
+          name: {
+            ilike: likeContains(input.keyword),
+          },
+        }
+      : undefined,
+  }
+
+  const [data, totalRows] = await Promise.all([
+    db.query.workspaceMemberModel.findMany({
+      ...pagination,
+      where,
+      with: {
+        user: true,
+      },
+    }),
+    db.$count(
+      workspaceMemberModel,
+      relationsFilterToSQL(workspaceMemberModel, where),
+    ),
+  ])
+  const pageCount = Math.ceil(totalRows / pagination.limit)
+
+  return { data, pageCount }
+}
+
+export async function getWorkspaceMember(
+  input: GetWorkspaceMemberRequest,
+): Promise<GetWorkspaceMemberResponse | undefined> {
+  return await db.query.workspaceMemberModel.findFirst({
+    where: {
+      id: input.memberId,
+      workspaceId: input.workspaceId,
+    },
+    with: {
+      user: true,
+    },
+  })
+}
+
+export const getAllWorkspaceMembers = async (userId: string) => {
+  const workspaceMembers = await db.query.workspaceMemberModel.findMany({
+    where: {
+      userId,
+    },
+    with: {
+      workspace: true,
+    },
+  })
+
+  const workspaces = workspaceMembers.map((member) => member.workspace)
+
+  const workspaceIds = Array.from(
+    new Set(workspaces.map((workspace) => workspace.id)),
+  )
+
+  return {
+    workspaceMembers: workspaceMembers as WorkspaceMemberResource[],
+    workspaces,
+    workspaceIds,
+  }
+}

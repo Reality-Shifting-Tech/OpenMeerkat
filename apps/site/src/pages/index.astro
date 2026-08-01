@@ -1,0 +1,252 @@
+---
+const GITHUB = "https://github.com/Reality-Shifting-Tech/OpenMeerkat"
+const CONTACT = "mailto:elias@realityshifting.tech"
+
+const chips = [
+  "WhatsApp",
+  "Messenger",
+  "Instagram",
+  "Telegram",
+  "TikTok",
+  "Zalo",
+  "Webchat",
+  "SMTP",
+  "PostgreSQL",
+  "Redis",
+  "BullMQ",
+  "MCP",
+]
+
+const sentries = [
+  {
+    tag: "Sentinels",
+    title: "Nothing slips past",
+    body: "Realtime delivery and typing indicators keep every conversation visible from the moment it arrives. The platform watches the mob so your team does not have to.",
+  },
+  {
+    tag: "One mob",
+    title: "Every channel, one inbox",
+    body: "WhatsApp, Messenger, Instagram, Telegram, TikTok, Zalo, webchat, and email land in a single conversation list with full contact context and history.",
+  },
+  {
+    tag: "Constant communication",
+    title: "Broadcast to every channel",
+    body: "Send a broadcast or sequence to a segment once and it reaches every channel your customers use, with delivery status per contact.",
+  },
+]
+
+const features = [
+  {
+    title: "Shared inbox",
+    body: "Every channel in one conversation list. Realtime updates, contact context, and full history, so your team answers customers, not apps.",
+    featured: true,
+  },
+  {
+    title: "Visual flow builder",
+    body: "Triggers, conditions, variables, and actions on a canvas. Build a conversation once, publish it to any connected channel.",
+  },
+  {
+    title: "AI agents",
+    body: "Provider-agnostic LLM agents with instructions and knowledge, wired into flows and the inbox with escalation to a human.",
+  },
+  {
+    title: "Broadcasts and sequences",
+    body: "Audience filters, scheduled sends, and delivery status per contact. Reach a segment, not everyone.",
+  },
+  {
+    title: "Webhooks",
+    body: "Subscribe to conversation, message, and agent events and receive JSON with retries. Your stack stays in sync.",
+  },
+  {
+    title: "Public API",
+    body: "A typed JSON API over /v1 with API keys scoped to a workspace. Every console operation is scriptable.",
+  },
+  {
+    title: "CLI",
+    body: "Create workspaces, connect channels, and run setup from the terminal. Scriptable and CI-friendly.",
+  },
+  {
+    title: "MCP server",
+    body: "The bundled MCP server exposes the platform to any MCP-capable agent. Agents operate, humans confirm.",
+  },
+]
+
+const stats = [
+  { value: "AGPL", label: "Free forever" },
+  { value: "$0", label: "Per-seat pricing" },
+  { value: "Self-host", label: "Your data, your stack" },
+]
+
+const quickstart = `$ docker compose up -d
+$ cp .env.example .env
+$ pnpm install
+$ pnpm --filter @openmeerkat/database db:setup
+$ pnpm dev   # builder :3123 · worker · realtime`
+---
+
+<Layout>
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <span class="kicker">Open source · AGPL-3.0 · Self-hostable</span>
+        <h1>OpenMeerkat: open-source omnichannel chatbot platform.</h1>
+        <p class="lede">
+          The self-hostable alternative to ManyChat, Chatfuel, and Wati. One inbox for every
+          channel, a visual flow builder, AI agents, and broadcasts on infrastructure you own.
+          Built for self-hosters and for AI agents as first-class operators.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href={GITHUB}>Star on GitHub</a>
+          <a class="btn ghost" href="/docs">Self-host in 5 minutes</a>
+          <a class="btn text" href="/pricing">See pricing →</a>
+        </div>
+        <div class="hero-proof">
+          {
+            stats.map((s) => (
+              <div class="stat">
+                <div class="value">{s.value}</div>
+                <div class="label">{s.label}</div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <div class="terminal reveal">
+        <span class="dim"># first bot, from zero</span><br />
+        {
+          quickstart.split("\n").map((line) => (
+            <>
+              {line}
+              <br />
+            </>
+          ))
+        }
+      </div>
+    </header>
+
+    <div class="strip">
+      {chips.map((name) => <span class="chip">{name}</span>)}
+    </div>
+
+    <section id="sentry">
+      <div class="section-head">
+        <h2>The chat platform that always shows up.</h2>
+        <p class="sub">
+          Meerkats post sentries, keep the mob moving, and never stop communicating. OpenMeerkat
+          does the same for your conversations: every channel watched, every message answered,
+          nothing lost.
+        </p>
+      </div>
+      <div class="cards">
+        {
+          sentries.map((s) => (
+            <div class="card">
+              <div class="card-tag">{s.tag}</div>
+              <h3>{s.title}</h3>
+              <p>{s.body}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="section-head">
+        <h2>Everything a chat platform needs</h2>
+        <p class="sub">
+          Channels, conversations, flows, agents, broadcasts, and APIs in one AGPL-3.0 codebase.
+          No feature gates, no license keys, no per-seat math.
+        </p>
+      </div>
+      <div class="cards">
+        {
+          features.map((f) => (
+            <div class={f.featured ? "card featured" : "card"}>
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
+            </div>
+          ))
+        }
+      </div>
+      <div class="cta" style="margin-top: 28px;">
+        <a class="btn ghost" href="/features">Explore every feature</a>
+      </div>
+    </section>
+
+    <section id="open-source">
+      <div class="section-head">
+        <h2>Free software, honestly priced</h2>
+        <p class="sub">
+          The code is AGPL-3.0 and free forever. You pay for what you cannot or will not run
+          yourself: hosting, upgrades, and a human on call. Never for the software.
+        </p>
+      </div>
+      <div class="callout">
+        <div>
+          <p class="license-line">license: GNU Affero General Public License v3.0</p>
+          <h3>Run it yourself, or let us run it</h3>
+          <p>
+            Self-host on your own hardware with PostgreSQL, Redis, and object storage of your
+            choice. Or take the managed plan and we deploy, upgrade, back up, and monitor your
+            instance. Both start from the same open codebase.
+          </p>
+          <div class="cta">
+            <a class="btn primary" href={GITHUB}>Star on GitHub</a>
+            <a class="btn ghost" href={`${GITHUB}/blob/main/LICENSE`}>Read the license</a>
+          </div>
+        </div>
+        <div>
+          <div class="price">
+            $0 <span class="per">self-hosted</span>
+          </div>
+          <p>
+            No per-seat pricing, no per-conversation fees, no feature gate. The community edition
+            is the whole product.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="managed">
+      <div class="section-head">
+        <h2>Prefer managed? We run it for you</h2>
+        <p class="sub">
+          Teams that would rather pay for setup and operations than run infrastructure get a
+          managed OpenMeerkat: deployed for you, kept current, and watched around the clock.
+        </p>
+      </div>
+      <div class="callout">
+        <div>
+          <p class="license-line">one-time setup + monthly hosting</p>
+          <h3>Managed Setup</h3>
+          <p>
+            We deploy your instance on managed infrastructure, migrate your data, run upgrades and
+            backups, and monitor uptime with alerting. You keep the AGPL-3.0 license and full
+            access to your data, any time.
+          </p>
+          <div class="cta">
+            <a class="btn primary" href="/pricing">See pricing</a>
+            <a class="btn ghost" href={CONTACT}>Talk to us</a>
+          </div>
+        </div>
+        <div>
+          <div class="price">
+            $499 <span class="per">one-time · then $99/mo</span>
+          </div>
+          <p>
+            Includes deployment and migration, managed hosting, automatic upgrades, nightly
+            backups, and uptime monitoring.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div class="final">
+      <div>
+        <h2>Ship your first bot this week.</h2>
+        <p>Star the repo, spin up the stack, and connect a channel before lunch.</p>
+      </div>
+      <a class="btn primary" href={GITHUB}>Get started on GitHub</a>
+    </div>
+  </div>
+</Layout>

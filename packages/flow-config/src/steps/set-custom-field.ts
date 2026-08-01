@@ -1,0 +1,38 @@
+import { createId, zodBigintAsString } from "@openmeerkat/utils"
+import { z } from "zod"
+import { stepTypes } from "./step-action"
+
+export const FieldOperationType = {
+  set: "O01",
+  append: "O02",
+  prepend: "O03",
+  increase: "O04",
+  decrease: "O05",
+} as const
+export type FieldOperationType =
+  (typeof FieldOperationType)[keyof typeof FieldOperationType]
+
+export const setCustomFieldStepSchema = z.object({
+  id: zodBigintAsString(),
+  stepType: z.literal(stepTypes.enum.setCustomField),
+  inputFieldId: z.string().trim().min(1),
+  operation: z.enum(FieldOperationType),
+  value: z.string().trim(),
+  /**
+   * IANA timezone captured from the editor's browser when the flow was saved,
+   * used to anchor a naive date/datetime `value` at runtime (the worker has no
+   * browser context) and to render "now" when `value` is left blank. Backend
+   * falls back to the contact/workspace zone when absent.
+   */
+  timezone: z.string().max(64).optional(),
+})
+
+export type SetCustomFieldStepSchema = z.infer<typeof setCustomFieldStepSchema>
+
+export const setCustomFieldStepDefaultFn = (): SetCustomFieldStepSchema => ({
+  id: createId(),
+  stepType: stepTypes.enum.setCustomField,
+  value: "",
+  inputFieldId: "",
+  operation: FieldOperationType.set,
+})

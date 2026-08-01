@@ -1,0 +1,126 @@
+"use client"
+
+import { DataTableColumnHeader } from "@openmeerkat/ui/components/data-table/data-table-column-header"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@openmeerkat/ui/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@openmeerkat/ui/components/ui/tooltip"
+import type { DataTableRowAction } from "@openmeerkat/ui/types/data-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import { EllipsisVerticalIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import Link from "next/link"
+import type { useTranslations } from "next-intl"
+import type { Dispatch, SetStateAction } from "react"
+import type { SpreadsheetResource } from "./schema/resource"
+
+type GetColumnsProps = {
+  t: ReturnType<typeof useTranslations>
+  setRowAction: Dispatch<
+    SetStateAction<DataTableRowAction<SpreadsheetResource> | null>
+  >
+}
+
+export function getSpreadsheetColumns({
+  t,
+  setRowAction,
+}: GetColumnsProps): ColumnDef<SpreadsheetResource>[] {
+  return [
+    {
+      accessorKey: "name",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t("fields.name.label")} />
+      ),
+      cell: ({ row }) => (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="inline-block max-w-[300px] truncate">
+                {row.original.name}
+              </div>
+            }
+          />
+          <TooltipContent>
+            <p>{row.original.name}</p>
+          </TooltipContent>
+        </Tooltip>
+      ),
+      size: 300,
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "link",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t("fields.url.label")} />
+      ),
+      cell: ({ row }) => (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="inline-block max-w-[300px] truncate">
+                <Link
+                  className="truncate"
+                  href={row.original.url}
+                  target="_black"
+                >
+                  {row.original.url}
+                </Link>
+              </div>
+            }
+          />
+          <TooltipContent>
+            <p>{row.original.url}</p>
+          </TooltipContent>
+        </Tooltip>
+      ),
+      size: 300,
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: "actions",
+      header: t("actions.actions"),
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label="Open menu"
+                className="flex size-8 p-0 data-[state=open]:bg-muted"
+                variant="ghost"
+              >
+                <EllipsisVerticalIcon aria-hidden="true" className="size-4" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem
+              onClick={() => setRowAction({ row, variant: "update" })}
+            >
+              <PencilIcon />
+              {t("actions.edit")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => setRowAction({ row, variant: "delete" })}
+            >
+              <Trash2Icon className="text-destructive" />
+              {t("actions.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      size: 50,
+      enableSorting: false,
+      enableHiding: false,
+    },
+  ]
+}

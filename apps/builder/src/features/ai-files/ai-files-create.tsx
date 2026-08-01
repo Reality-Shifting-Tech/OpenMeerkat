@@ -1,0 +1,63 @@
+import { getAllowableKnowledgeExtensions } from "@openmeerkat/ai"
+import { DirectUploadButton } from "@openmeerkat/ui/components/uploader/direct-upload-button"
+import { getMimeTypeFromFile } from "@openmeerkat/ui/lib/file-types"
+import { useTranslations } from "next-intl"
+import { useAction } from "next-safe-action/hooks"
+import { toast } from "sonner"
+import { useWorkspaceId } from "@/hooks/routing"
+import { createAIFileAction } from "./actions/create-ai-file.action"
+
+export function AIFilesCreate({ onSuccess }: { onSuccess?: () => void }) {
+  const workspaceId = useWorkspaceId()
+
+  const t = useTranslations()
+
+  const { execute, isPending } = useAction(
+    createAIFileAction.bind(null, workspaceId),
+    {
+      onSuccess: () => {
+        toast.success(
+          t("messages.createdSuccess", {
+            feature: t("fields.aiFile.label"),
+          }),
+        )
+        onSuccess?.()
+      },
+      onError: ({ error }) => {
+        toast.error(
+          error.serverError ??
+            t("messages.createdFailed", {
+              feature: t("fields.aiFile.label"),
+            }),
+        )
+      },
+    },
+  )
+
+  return (
+    <DirectUploadButton
+      accept={getAllowableKnowledgeExtensions()}
+      disabled={isPending}
+      label={t("actions.uploadFile")}
+      maxSize={26_214_400} // 25MB
+      multiple={false}
+      onUploadError={(error, file) => {
+        toast.error(`Failed to upload ${file.name}`, {
+          description: error.message,
+        })
+      }}
+      onUploadSuccess={(filePath, file) => {
+        const mimeType = getMimeTypeFromFile(file)
+
+        execute({
+          name: file.name,
+          path: filePath,
+          mimeType,
+          size: file.size,
+        })
+      }}
+      uploadPath={`workspaces/${workspaceId}/ai-files`}
+      workspaceId={workspaceId}
+    />
+  )
+}

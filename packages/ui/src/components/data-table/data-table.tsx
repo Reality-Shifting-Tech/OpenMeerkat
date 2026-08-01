@@ -1,0 +1,121 @@
+import { flexRender, type Table as TanstackTable } from "@tanstack/react-table"
+import type * as React from "react"
+
+import { DataTablePagination } from "@openmeerkat/ui/components/data-table/data-table-pagination"
+import type { DataTablePaginationLabels } from "@openmeerkat/ui/components/data-table/data-table-pagination"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@openmeerkat/ui/components/ui/table"
+import { getCommonPinningStyles } from "@openmeerkat/ui/lib/data-table"
+import { cn } from "@openmeerkat/ui/lib/utils"
+
+interface DataTableProps<TData> extends React.ComponentProps<"div"> {
+  table: TanstackTable<TData>
+  actionBar?: React.ReactNode
+  labels?: DataTablePaginationLabels & {
+    noResults?: string
+  }
+  scrollable?: boolean
+}
+
+export function DataTable<TData>({
+  table,
+  actionBar,
+  labels,
+  scrollable = false,
+  children,
+  className,
+  ...props
+}: DataTableProps<TData>) {
+  return (
+    <div
+      className={cn("flex w-full flex-col gap-2.5 overflow-auto", className)}
+      {...props}
+    >
+      {children}
+      <div
+        className={cn(
+          "rounded-md border",
+          scrollable ? "overflow-x-auto" : "overflow-hidden",
+        )}
+      >
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    colSpan={header.colSpan}
+                    style={{
+                      ...getCommonPinningStyles({ column: header.column }),
+                      width:
+                        header.column.columnDef.size === undefined
+                          ? undefined
+                          : header.getSize(),
+                    }}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      style={{
+                        ...getCommonPinningStyles({ column: cell.column }),
+                        width:
+                          cell.column.columnDef.size === undefined
+                            ? undefined
+                            : cell.column.getSize(),
+                      }}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={table.getAllColumns().length}
+                  className="h-24 text-center"
+                >
+                  {labels?.noResults ?? "No results."}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <DataTablePagination labels={labels} table={table} />
+        {actionBar &&
+          table.getFilteredSelectedRowModel().rows.length > 0 &&
+          actionBar}
+      </div>
+    </div>
+  )
+}

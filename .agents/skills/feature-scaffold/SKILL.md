@@ -1,0 +1,615 @@
+---
+name: feature-scaffold
+description: >-
+  Scaffold new features following project conventions for the builder app.
+  Use when creating a new feature, page, component, server action, query,
+  or adding a new section to the web application.
+---
+
+# Feature Scaffold
+
+## Feature Directory Structure
+
+Features live in `apps/builder/src/features/<feature-name>/`. Standard layout:
+
+```
+features/<feature-name>/
+  actions/              → Server actions (next-safe-action)
+    create-item-action.ts
+    delete-item-action.ts
+  api/                  → oRPC route handlers
+    index.ts
+    authenticated.ts
+    workspace-token.ts
+  queries/              → Server-side DB queries
+    index.ts
+  schema/               → Zod schemas
+    query.ts            → List/filter params
+    action.ts           → Mutation inputs
+    resource.ts         → Response shapes
+  provider/             → Zustand store + context (if needed)
+    item-store.ts
+    item-store-provider.tsx
+  components/           → UI components (if many)
+  hooks/                → Feature-specific hooks (if needed)
+  item-table.tsx        → Root-level components (if few)
+  create-item-dialog.tsx
+```
+
+Not every feature needs all directories. Use what's appropriate.
+
+## Page Pattern (Server Component)
+
+```typescript
+// app/space/[workspaceId]/(has-folder)/<feature>/page.tsx
+import { Suspense } from "react"
+import { getIdFromParams } from "@/lib/params"
+import { listItems } from "@/features/<feature>/queries"
+import { ItemsTable } from "@/features/<feature>/items-table"
+
+export default async function ItemsPage(props: {
+  params: Promise<{ workspaceId: string }>
+  searchParams: Promise<SearchParams>
+}) {
+  const workspaceId = getIdFromParams(await props.params, "workspaceId")
+  const searchParams = await props.searchParams
+  const search = listItemsSearchParamsCache.parse(searchParams)
+
+  const promises = Promise.all([
+    listItems({ ...search, workspaceId }),
+  ])
+
+  return (
+    <Suspense>
+      <ItemsTable promises={promises} workspaceId={workspaceId} />
+    </Suspense>
+  )
+}
+```
+
+### Key Page Patterns
+
+- Pages are **async server components** (no `"use client"`)
+- `params` and `searchParams` are `Promise<...>` (Next.js 15+ style)
+- Use `getIdFromParams()` to extract and validate IDs
+- Pass `Promise.all([...])` as `promises` prop to client components
+- Client components unwrap with `React.use(promises)`
+- URL state via **nuqs** (`listItemsSearchParamsCache.parse()`)
+
+### Public routes (short links, webhooks, open redirects)
+
+Some features expose **unauthenticated** URLs (tracking links, asset callbacks, etc.):
+
+- Implement the handler as a **Route Handler** under `apps/builder/src/app/<public-prefix>/.../route.ts` (or `page.tsx` when appropriate).
+- Add the URL prefix to `publicRoutes` in `apps/builder/src/proxy.ts` so the middleware does not force sign-in for those paths.
+- Put redirect rules, URL templating, and validation in a small `lib/*` module when the same logic might be reused or tested.
+- Register new **Tools** entries in `apps/builder/src/features/tools/tools-list.tsx` (with `getLink`) and add **i18n** keys under `apps/builder/messages/*.json`.
+
+## Client Component Pattern
+
+```typescript
+"use client"
+
+import { use } from "react"
+
+type Props = {
+  promises: Promise<[ItemList]>
+  workspaceId: string
+}
+
+export const ItemsTable = ({ promises, workspaceId }: Props) => {
+  const [items] = use(promises)
+
+  return (
+    // Table UI using @openmeerkat/ui components
+  )
+}
+```
+
+## Server Actions
+
+Use `next-safe-action` with workspace-scoped client:
+
+```typescript
+// actions/create-item-action.ts
+"use server"
+
+import { workspaceActionClient } from "@/lib/safe-action"
+import { createItemRequest } from "../schema/action"
+
+export const createItemAction = workspaceActionClient
+  .bindArgsSchemas([z.string()]) // workspaceId
+  .inputSchema(createItemRequest)
+  .action(
+    async ({
+      bindArgsParsedInputs: [workspaceId],
+      parsedInput,
+    }) => {
+      return await createItem({ workspaceId, ...parsedInput })
+    },
+  )
+```
+
+## Tests
+
+- Put builder app-level tests for actions, routes, API behavior, cache behavior,
+  or cross-feature behavior in `apps/builder/__tests__/`.
+- Use colocated `src/features/**/__tests__` only for narrow component/unit tests
+  that are clearly owned by that feature.
+
+### Action Clients
+
+- `workspaceActionClient` — requires workspace membership
+- `workspaceActionClientAllowExpired` — resolves membership the same way but skips the trial-expiry gate for delete, disconnect, and cancel actions that must remain available post-expiry. New actions should default to the gated client (fail closed) and opt into this escape hatch only when the operation is intentionally allowed.
+- `authActionClient` — requires authenticated session only
+
+## Queries (Server-Side)
+
+**Rule:** Queries must NOT import `db` directly. Call a service from `@openmeerkat/business` or a repository. See `.agents/rules/data-access.md`.
+
+```typescript
+// queries/index.ts
+import { itemService } from "@openmeerkat/business"
+
+export const listItems = async (params: ListItemsParams) => {
+  return itemService.list({ workspaceId: params.workspaceId })
+}
+
+// RSC wrapper with auth check
+export const listItemsRSC = async (params: ListItemsParams) => {
+  await assertCurrentUserCanAccessChatbot(params.workspaceId)
+  return listItems(params)
+}
+```
+
+## Forms
+
+Use React Hook Form + Zod + next-safe-action adapter:
+
+```typescript
+"use client"
+
+import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { createItemAction } from "../actions/create-item-action"
+import { createItemRequest } from "../schema/action"
+
+export const CreateItemForm = ({ workspaceId }: { workspaceId: string }) => {
+  const { form, handleSubmitWithAction } = useHookFormAction(
+    createItemAction.bind(null, workspaceId),
+    zodResolver(createItemRequest),
+    { formProps: { defaultValues: { name: "" } } },
+  )
+
+  return (
+    <form onSubmit={handleSubmitWithAction}>
+      {/* Form fields using @openmeerkat/ui form components */}
+    </form>
+  )
+}
+```
+
+### Form field component priority
+
+Always pick the highest-priority option that fits the field type:
+
+1. **Defined form field** from `@openmeerkat/ui/components/form/*` — **first choice**.
+   Handles label, optional marker, description, and `FormMessage` automatically.
+2. **Shadcn UI primitive** from `@openmeerkat/ui/components/ui/*` inside a manual
+   `FormField`/`FormItem` block — only when no defined field covers the use case.
+3. **Raw React/HTML element** — last resort.
+
+Available defined fields:
+
+| Component | Import path | Use for |
+|---|---|---|
+| `InputField` | `form/input-field` | Text inputs |
+| `InputNumberField` | `form/input-number-field` | Numeric inputs (stepper UI) |
+| `TextareaField` | `form/textarea-field` | Multi-line text |
+| `SelectField` | `form/select-field` | Dropdowns; supports `allowClear`, `options`, `fetchOptionsUrl` |
+| `ComboboxField` | `form/combobox-field` | Searchable single-select |
+| `MultiSelectField` | `form/multi-select-field` | Multi-select |
+| `CheckboxField` | `form/checkbox-field` | Boolean checkbox |
+| `SwitchField` | `form/switch-field` | Toggle switch |
+| `RadioGroupField` | `form/radio-group-field` | Radio group |
+| `SliderField` | `form/slider-field` | Range slider |
+| `DatePickerField` | `form/date-picker-field` | Date picker popover |
+| `ColorPickerField` | `form/color-picker-field` | Color picker |
+
+All defined fields read `control` from `useFormContext` — no `control` prop
+needed as long as a `<Form {...form}>` provider wraps the form.
+
+### Form Section Layout — Use `<Card>`
+
+Multi-section forms (create/edit pages) use `<Card>` to group related fields. **Never use a plain `<div className="rounded-lg border p-6">` wrapper** — always use the Card component.
+
+```typescript
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@openmeerkat/ui/components/ui/card"
+
+// Section with a title
+<Card>
+  <CardHeader>
+    <CardTitle className="text-base">{t("feature.sections.pricing")}</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-4">
+    <InputField ... />
+    <InputField ... />
+  </CardContent>
+</Card>
+
+// Section without a title (e.g. basic info / first card)
+<Card>
+  <CardContent className="space-y-4 pt-6">
+    <InputField ... />
+  </CardContent>
+</Card>
+```
+
+Full-page create/edit forms follow this layout:
+
+```typescript
+<div className="flex min-h-screen flex-col bg-muted/20">
+  {/* Sticky top bar with title + Save/Cancel */}
+  <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-background px-6 py-3">
+    <h1 className="font-semibold text-lg">{t("feature.create.title")}</h1>
+    <div className="flex items-center gap-2">
+      <Button onClick={() => router.back()} type="button" variant="ghost">
+        {t("actions.cancel")}
+      </Button>
+      <Button type="submit">{t("actions.save")}</Button>
+    </div>
+  </div>
+
+  {/* Scrollable form content */}
+  <Form {...form}>
+    <form className="mx-auto w-full max-w-3xl space-y-6 px-6 py-8" onSubmit={handleSubmitWithAction}>
+      <Card>...</Card>
+      <Card>...</Card>
+    </form>
+  </Form>
+</div>
+```
+
+### CRITICAL — Default Values for Nullable Text Fields
+
+React Hook Form requires non-null values for controlled text inputs. Passing `null` as a `defaultValues` entry causes React to treat the input as **uncontrolled**, triggering warnings and unpredictable behavior.
+
+**Rule:** Always use `""` (empty string) for optional/nullable text field defaults. Never use `null` or `undefined`.
+
+When the DB field is nullable, add a `z.preprocess` step to the Zod schema so the form sends `""` while the server action still receives `null`:
+
+```typescript
+// schema/action.ts — convert "" → null before validation
+export const createItemSchema = z.object({
+  name: z.string().trim().min(1),
+  // CORRECT: preprocess empty string to null for nullable DB fields
+  icon: z.preprocess(
+    (val) => (val === "" ? null : val),
+    z.string().trim().nullable().default(null),
+  ),
+})
+```
+
+```typescript
+// In defaultValues — use "" not null
+const form = useForm<z.input<typeof createItemSchema>>({
+  resolver: zodResolver(createItemSchema),
+  defaultValues: { name: "", icon: "" }, // CORRECT
+  // defaultValues: { name: "", icon: null }, // WRONG — uncontrolled input
+})
+
+// When seeding from existing DB data (edit forms), coerce null → ""
+defaultValues={{
+  name: item.name,
+  icon: item.icon ?? "", // CORRECT — null from DB → "" for the form
+}}
+```
+
+### Watching Form Values — Use `useWatch`
+
+To reactively read form field values in render, use `useWatch` from `react-hook-form` instead of `form.watch()`. `useWatch` is a proper React hook and avoids unnecessary re-renders of parent components.
+
+```typescript
+import { useWatch } from "react-hook-form"
+
+// WRONG — causes parent re-renders
+const inventoryPolicy = form.watch("inventoryPolicy")
+
+// CORRECT — scoped subscription
+const inventoryPolicy = useWatch({ control: form.control, name: "inventoryPolicy" })
+const longDescription = useWatch({ control: form.control, name: "longDescription" }) ?? ""
+```
+
+### CRITICAL — `.bind()` for actions with `bindArgsSchemas`
+
+When an action uses `bindArgsSchemas` (e.g. for workspaceId), you **MUST** call `.bind(null, workspaceId)` before passing to `useHookFormAction`. Without `.bind()`, TypeScript will error: "Target signature provides too few arguments."
+
+```typescript
+// WRONG — will cause type error
+useHookFormAction(createItemAction, zodResolver(schema), ...)
+
+// CORRECT — bind the workspaceId first
+useHookFormAction(createItemAction.bind(null, workspaceId), zodResolver(schema), ...)
+```
+
+Similarly for `useAction` with delete actions:
+```typescript
+const { execute } = useAction(
+  deleteItemAction.bind(null, workspaceId, itemId),
+  { onSuccess: ..., onError: ... },
+)
+// Call execute() with NO arguments (not execute({}))
+execute()
+```
+
+## State Management (Zustand)
+
+For features needing client-side state:
+
+```typescript
+// provider/item-store.ts
+import { createStore } from "zustand/vanilla"
+
+type ItemState = {
+  items: Item[]
+  selectedId: string | null
+}
+
+type ItemActions = {
+  setSelectedId: (id: string | null) => void
+}
+
+export type ItemStore = ItemState & ItemActions
+
+export const createItemStore = (initial: Partial<ItemState> = {}) =>
+  createStore<ItemStore>((set) => ({
+    items: [],
+    selectedId: null,
+    ...initial,
+    setSelectedId: (id) => set({ selectedId: id }),
+  }))
+```
+
+Wrap with React context provider (`provider/item-store-provider.tsx`).
+
+## Import Conventions
+
+| What | Path |
+|------|------|
+| App internal | `@/features/<feature>/...`, `@/lib/...`, `@/components/...` |
+| Shared UI | `@openmeerkat/ui/<component>` |
+| Database | `@openmeerkat/database/client`, `@openmeerkat/database/schema` |
+| Types | `@openmeerkat/database/types` |
+| oRPC client | `@/lib/orpc/orpc` |
+| oRPC stacks | `@/orpc` (for `authorizedAPI`, `workspaceTokenAuthAPI`) |
+| Auth middleware | `@/middlewares/auth` |
+| Safe action clients | `@/lib/safe-action` |
+
+## Layout Patterns
+
+- **Route groups** `()` organize without URL segments: `(settings)`, `(has-folder)`, `(ai)`
+- **Parallel routes** `@slot` for multi-panel layouts (e.g. channels settings)
+- **Workspace layout** at `space/[workspaceId]/layout.tsx`: auth, sidebar, workspace context
+- Server layouts: auth checks, data loading
+- Client layouts: tabs, accordions, interactive navigation
+
+## Internationalization (i18n) — next-intl
+
+All user-facing text **MUST** be internationalized using `next-intl`. Never hardcode labels, placeholders, messages, or button text.
+
+### Setup
+
+```typescript
+import { useTranslations } from "next-intl"
+
+const t = useTranslations()
+```
+
+### Translation File Structure
+
+Translations live in `apps/builder/messages/en.json`. The file is organized into namespaces:
+
+| Namespace | Purpose | Example |
+|-----------|---------|---------|
+| `fields.*` | Reusable field labels, placeholders, descriptions | `fields.name.label`, `fields.email.placeholder` |
+| `actions.*` | Button/action labels | `actions.cancel`, `actions.create`, `actions.save` |
+| `messages.*` | Toast messages, confirmations, descriptions | `messages.createdSuccess`, `messages.deleteConfirmation` |
+| `<feature>.*` | Feature-specific text (titles, descriptions, unique labels) | `smtp.setting.label`, `webchat.title` |
+
+### Form Fields — Reuse `fields.*` Definitions
+
+Form field `label` and `placeholder` props **MUST** use translations from the `fields` namespace in `en.json`. This ensures consistency across the entire app.
+
+**Pattern:**
+```typescript
+<InputField
+  label={t("fields.name.label")}
+  name="name"
+  placeholder={t("fields.name.placeholder")}
+  required
+/>
+
+<SelectField
+  label={t("fields.type.label")}
+  name="type"
+  options={options}
+  required
+/>
+```
+
+**Reusable fields already defined** (check `en.json` → `fields` before creating new ones):
+- `fields.name` — Name
+- `fields.email` — Email
+- `fields.password` — Password
+- `fields.description` — Description
+- `fields.type` — Type
+- `fields.url` — URL
+- `fields.status` — Status
+- `fields.provider` — Provider
+- `fields.host` — Host
+- `fields.port` — Port
+- `fields.username` — Username
+- `fields.fromAddress` — From Address
+- ... and many more (always check `en.json` first)
+
+**Adding new field definitions** — When a field doesn't exist in `en.json`, add it to the `fields` object:
+```json
+{
+  "fields": {
+    "myNewField": {
+      "label": "My New Field",
+      "placeholder": "Enter value"
+    }
+  }
+}
+```
+
+Each field entry can have: `label` (required), `placeholder` (optional), `description` (optional).
+
+### CRITICAL — Never Hardcode Labels in Forms
+
+```typescript
+// WRONG — hardcoded label strings
+<InputField label="Username" name="username" placeholder="user@example.com" />
+<InputField label="Password" name="password" />
+
+// CORRECT — use t() with fields namespace
+<InputField
+  label={t("fields.username.label")}
+  name="username"
+  placeholder={t("fields.username.placeholder")}
+/>
+<InputField
+  label={t("fields.password.label")}
+  name="password"
+/>
+```
+
+### Actions (Buttons)
+
+Use `actions.*` for all button labels:
+
+```typescript
+<Button onClick={onCancel} type="button" variant="ghost">
+  {t("actions.cancel")}
+</Button>
+<Button type="submit">
+  {t("actions.create")}
+</Button>
+```
+
+Common actions: `actions.cancel`, `actions.create`, `actions.save`, `actions.delete`, `actions.update`, `actions.confirm`, `actions.connect`, `actions.disconnect`.
+
+Parametric actions with `{feature}` interpolation:
+```typescript
+t("actions.createFeature", { feature: t("fields.sequences.label") })
+t("actions.connectFeature", { feature: "WhatsApp" })
+```
+
+### Toast Messages
+
+Use `messages.*` with `{feature}` interpolation:
+
+```typescript
+// Success
+toast.success(t("messages.createdSuccess", { feature: "SMTP" }))
+toast.success(t("messages.updatedSuccess", { feature: t("fields.webhook.label") }))
+
+// Error — prefer translated messages, fallback to serverError
+toast.error(error.serverError || t("messages.unknownError"))
+```
+
+### Feature-Specific Translations
+
+For text unique to a feature (not reusable), add a feature namespace:
+
+```json
+{
+  "smtp": {
+    "setting": {
+      "description": "Send emails using your SMTP server.",
+      "label": "(Email) SMTP"
+    }
+  }
+}
+```
+
+Access: `t("smtp.setting.label")`, `t("smtp.setting.description")`
+
+### Dialog / Confirmation Text
+
+Use `messages.*`:
+```typescript
+t("messages.deleteConfirmation", { feature: "contact" })
+t("messages.disconnectFeatureDescription", { feature: "SMTP" })
+```
+
+### i18n Checklist
+
+Before submitting any feature:
+1. **No hardcoded user-facing strings** — every label, placeholder, button, message uses `t()`
+2. **Reuse `fields.*`** — check existing field definitions before creating new ones
+3. **Add missing translations** — if a field key doesn't exist in `en.json`, add it
+4. **Use interpolation** — for dynamic text, use `{feature}`, `{name}` params
+5. **Feature namespace** — feature-specific text goes under `<featureName>.*`
+
+## Logging
+
+Never use `console.log`, `console.error`, or `console.warn` in server-side code (actions, queries, API handlers). Use the structured logger instead.
+
+```typescript
+// ✅ correct — server action / query
+import baseLogger from "@openmeerkat/logger"
+const logger = baseLogger.child({ feature: "myFeature" })
+
+try {
+  return await doWork(input)
+} catch (error) {
+  logger.error({ err: error }, "[myFeature] operation failed")
+  throw error
+}
+```
+
+Use `err: error` (not `error: error`) — pino's serializer is keyed on `err`.
+
+Client components may use `console` only for local development debugging that is removed before merge.
+
+## Services — Business Logic Belongs in @openmeerkat/business
+
+Business logic services (DB queries, domain mutations, cache management) **MUST NOT** be placed inside `features/<name>/`. They belong in `packages/business/src/<domain>/service.ts`.
+
+### Pattern
+- `packages/business/src/<domain>/service.ts` — class extending `BaseService`, singleton export
+- `packages/business/src/<domain>/index.ts` — `export * from "./service"`
+- `packages/business/src/index.ts` — add `export * from "./<domain>"`
+
+### Feature folders only contain
+- `queries/` — RSC wrappers that call business services + add auth checks
+- `actions/` — next-safe-action handlers that call business services
+- `api/` — oRPC handlers
+- `schema/` — Zod validation schemas (NOT imported by business package)
+- `components/`, `hooks/`, `provider/` — UI concerns
+
+**Never** create a `*.service.ts` inside a feature folder for new work. If one already exists, move it to `@openmeerkat/business` before extending it.
+
+```typescript
+import { integrationService, webhookService } from "@openmeerkat/business"
+```
+
+## Checklist for New Feature
+
+1. Create feature directory under `src/features/<name>/`
+2. Define Zod schemas in `schema/`
+3. Create DB queries in `queries/`
+4. Add server actions in `actions/` (if mutations needed)
+5. Create oRPC API in `api/` (if API access needed)
+6. Register router in `src/routers/index.ts`
+7. Create page(s) under `src/app/space/[workspaceId]/...`
+8. Build UI components (server page → client table/form)
+9. **Add i18n translations** to `apps/builder/messages/en.json` — reuse `fields.*` for form labels, add feature-specific text under `<featureName>.*`
+10. **Verify no hardcoded strings** — all user-facing text uses `useTranslations()` + `t()`

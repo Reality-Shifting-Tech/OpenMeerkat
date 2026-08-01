@@ -1,0 +1,143 @@
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import {
+  type FormatDateStepSchema,
+  FormatTimezone,
+  formatDateStepSchema,
+} from "@openmeerkat/flow-config"
+import { InputField } from "@openmeerkat/ui/components/form/input-field"
+import { SelectField } from "@openmeerkat/ui/components/form/select-field"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { Form } from "@openmeerkat/ui/components/ui/form"
+import { ZapIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
+import { useState } from "react"
+import { useForm, useFormContext } from "react-hook-form"
+import { CustomFieldSelect } from "@/features/custom-fields/custom-field-select"
+import { BaseStepEditor } from "../base/editor"
+
+const FormatDateStepEditor = ({ parentName }: { parentName: string }) => {
+  const t = useTranslations()
+
+  return (
+    <BaseStepEditor icon={ZapIcon} title={t("flows.actions.formatDate")}>
+      <FormatDateDialog parentName={parentName} />
+    </BaseStepEditor>
+  )
+}
+
+const FormatDateDialog = ({ parentName }: { parentName: string }) => {
+  const t = useTranslations()
+  const [open, setOpen] = useState(false)
+  const { setValue, getValues } = useFormContext()
+
+  const form = useForm<FormatDateStepSchema>({
+    resolver: zodResolver(formatDateStepSchema),
+    defaultValues: {
+      ...getValues(parentName),
+    },
+    mode: "onChange",
+  })
+
+  const onSubmit = (data: FormatDateStepSchema) => {
+    setValue(`${parentName}.inputFieldId`, data.inputFieldId)
+    setValue(`${parentName}.format`, data.format)
+    setValue(`${parentName}.outputFieldId`, data.outputFieldId)
+    setValue(`${parentName}.timezone`, data.timezone)
+    setOpen(false)
+  }
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger
+        render={
+          <div className="flex justify-center">
+            <Button size="sm" type="button" variant="outline">
+              {t("actions.edit")}
+            </Button>
+          </div>
+        }
+      />
+      <DialogContent className={"max-h-screen max-w-lg overflow-y-scroll"}>
+        <DialogHeader>
+          <DialogTitle>{t("flows.actions.formatDate")}</DialogTitle>
+          <DialogDescription />
+        </DialogHeader>
+
+        <Form {...form}>
+          <form
+            className="flex w-full flex-col gap-4"
+            onSubmit={form.handleSubmit(onSubmit)}
+          >
+            <CustomFieldSelect
+              customFieldTypes={["date", "datetime"]}
+              label={t("fields.inputCustomField.label")}
+              name="inputFieldId"
+              required
+            />
+
+            <InputField
+              label={t("fields.format.label")}
+              name="format"
+              required
+            />
+
+            <CustomFieldSelect
+              allowCreate={true}
+              customFieldTypes={["shortText", "longText"]}
+              label={t("fields.outputCustomField.label")}
+              name="outputFieldId"
+              required
+            />
+
+            <SelectField
+              label={t("fields.timezone.label")}
+              name="timezone"
+              options={[
+                {
+                  label: t("flows.formatTimezone.contactTimezone"),
+                  value: FormatTimezone.contact,
+                },
+                {
+                  label: t("flows.formatTimezone.timezone"),
+                  value: FormatTimezone.workspace,
+                },
+              ]}
+              required
+            />
+
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button variant="outline">{t("actions.cancel")}</Button>
+                }
+              />
+
+              <Button
+                disabled={
+                  !form.formState.isValid || form.formState.isSubmitting
+                }
+                type="submit"
+              >
+                {t("actions.save")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default FormatDateStepEditor

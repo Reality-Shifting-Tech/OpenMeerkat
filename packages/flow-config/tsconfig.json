@@ -1,0 +1,8 @@
+{
+  "extends": "@openmeerkat/typescript-config/base.json",
+  "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "strictNullChecks": true,
+    "types": ["node"]
+  }
+}

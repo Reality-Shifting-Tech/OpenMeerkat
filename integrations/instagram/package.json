@@ -1,0 +1,35 @@
+{
+  "name": "@openmeerkat/integration-instagram",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openmeerkat/business": "workspace:*",
+    "@openmeerkat/flow-config": "workspace:*",
+    "@openmeerkat/logger": "workspace:*",
+    "@openmeerkat/sdk": "workspace:*",
+    "@openmeerkat/utils": "workspace:*",
+    "cross-fetch": "^4.1.0",
+    "image-size": "^2.0.2",
+    "ky": "^2.0.2",
+    "remeda": "^2.34.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openmeerkat/typescript-config": "workspace:*",
+    "@openmeerkat/vitest-config": "workspace:*",
+    "@types/node": "^24.10.4",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./apis/*": "./src/apis/*.ts",
+    "./schemas": "./src/schemas.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  }
+}

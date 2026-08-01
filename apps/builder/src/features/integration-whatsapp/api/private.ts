@@ -1,0 +1,24 @@
+import { listIntegrationWhatsappsResponse } from "@openmeerkat/business"
+import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
+import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { authorizedAPI } from "@/orpc"
+import { listIntegrationWhatsapps } from "../queries"
+
+export const integrationWhatsappInternalAPIs = {
+  listIntegrationWhatsappInternalAPI: authorizedAPI
+    .route({
+      method: "GET",
+      path: "/workspaces/{workspaceId}/integrations/whatsapp",
+      summary: "List whatsapp integration",
+      tags: ["Integrations"],
+    })
+    .input(withWorkspaceIdSchema)
+    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .output(listIntegrationWhatsappsResponse)
+    .handler(async ({ input }) => {
+      const { workspaceId, ...rest } = input
+      const { data } = await listIntegrationWhatsapps({ ...rest, workspaceId })
+
+      return data
+    }),
+}

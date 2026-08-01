@@ -1,0 +1,262 @@
+import type { DatabaseClient } from "@openmeerkat/database/client"
+import { ROOT_TENANT_ID } from "@openmeerkat/database/schema"
+import type {
+  TenantHelpItemModel,
+  TenantModel,
+} from "@openmeerkat/database/types"
+import { customDomainService } from "../enterprise/custom-domain/service"
+import { tenantService } from "../enterprise/tenant/service"
+import { tenantHelpItemService } from "../enterprise/tenant-help-item/service"
+import { integrationContextEnv } from "../integration-context/keys"
+import { hasEnterpriseFeatures } from "../user/entitlements"
+import { workspaceService } from "../workspace/service"
+import { deriveUrls } from "./derive-urls"
+
+const TRAILING_SLASH_RE = /\/$/
+
+export type EmailTemplate = { subject?: string; body?: string }
+
+export type TenantSettings = {
+  appUrl: string
+  wsUrl: string
+  storageUrl: string
+  name: string
+  logoLightUrl: string
+  logoDarkUrl: string
+  faviconUrl: string
+  theme: string | null
+  customJS: string | null
+  customCSS: string | null
+  policyUrl: string | null
+  termsOfServiceUrl: string | null
+  signupEmailTemplate: EmailTemplate | null
+  forgotPasswordEmailTemplate: EmailTemplate | null
+  magicLinkEmailTemplate: EmailTemplate | null
+  accountCredentialsEmailTemplate: EmailTemplate | null
+  helpItems: TenantHelpItemModel[]
+}
+
+const buildDefaults = (helpItems: TenantHelpItemModel[]): TenantSettings => {
+  const env = integrationContextEnv()
+  const derived = deriveUrls(
+    env.NEXT_PUBLIC_BUILDER_URL,
+    env.NEXT_PUBLIC_STORAGE_URL,
+    { forceHttps: env.FORCE_PUBLIC_HTTPS },
+  )
+  return {
+    appUrl: derived.appUrl,
+    wsUrl: derived.wsUrl,
+    storageUrl: derived.storageUrl,
+    name: "OpenMeerkat",
+    logoLightUrl: `${derived.appUrl}/brand/logo_white.svg`,
+    logoDarkUrl: `${derived.appUrl}/brand/logo_black.svg`,
+    faviconUrl: `${derived.appUrl}/brand/icon_black.svg`,
+    theme: null,
+    customJS: null,
+    customCSS: null,
+    policyUrl: "https://openmeerkat.com/privacy/",
+    termsOfServiceUrl: "https://openmeerkat.com/terms/",
+    signupEmailTemplate: null,
+    forgotPasswordEmailTemplate: null,
+    magicLinkEmailTemplate: null,
+    accountCredentialsEmailTemplate: null,
+    helpItems,
+  }
+}
+
+const getDefaultSettings = async (): Promise<TenantSettings> => {
+  const helpItems = await tenantHelpItemService.listByTenant(ROOT_TENANT_ID)
+  return buildDefaults(helpItems)
+}
+
+/**
+ * Re-anchor the URL-derived settings to a white-label custom domain.
+ * The env defaults key every URL off `NEXT_PUBLIC_BUILDER_URL`; on a custom
+ * domain those must instead point at the tenant's own host so that public
+ * artifacts (inbox links, ws, fallback brand assets) resolve on the branded
+ * domain. White-label domains are always served over HTTPS in production.
+ */
+const applyCustomDomain = (
+  defaults: TenantSettings,
+  domain: string,
+  storageBaseUrl?: string,
+): TenantSettings => {
+  const derived = deriveUrls(`https://${domain}`, storageBaseUrl)
+  return {
+    ...defaults,
+    appUrl: derived.appUrl,
+    wsUrl: derived.wsUrl,
+    storageUrl: derived.storageUrl,
+    logoLightUrl: `${derived.appUrl}/brand/logo_white.svg`,
+    logoDarkUrl: `${derived.appUrl}/brand/logo_black.svg`,
+    faviconUrl: `${derived.appUrl}/brand/icon_black.svg`,
+  }
+}
+
+const applyTenantSetting = (
+  defaults: TenantSettings,
+  setting: TenantModel,
+  helpItems: TenantHelpItemModel[],
+  enterpriseFeaturesEnabled: boolean,
+): TenantSettings => {
+  const storageUrl = setting.storageUrl
+    ? `${setting.storageUrl.replace(TRAILING_SLASH_RE, "")}/`
+    : defaults.storageUrl
+  return {
+    ...defaults,
+    storageUrl,
+    name: setting.brandName ?? defaults.name,
+    logoLightUrl: setting.logoLightPath
+      ? new URL(setting.logoLightPath, storageUrl).toString()
+      : defaults.logoLightUrl,
+    logoDarkUrl: setting.logoDarkPath
+      ? new URL(setting.logoDarkPath, storageUrl).toString()
+      : defaults.logoDarkUrl,
+    faviconUrl: setting.faviconPath
+      ? new URL(setting.faviconPath, storageUrl).toString()
+      : defaults.faviconUrl,
+    theme: setting.theme ?? null,
+    // customJs and customCSS are gated to Enterprise/Cloud only.
+    customJS: enterpriseFeaturesEnabled ? (setting.customJs ?? null) : null,
+    customCSS: enterpriseFeaturesEnabled ? (setting.customCss ?? null) : null,
+    policyUrl: setting.policyUrl ?? defaults.policyUrl,
+    termsOfServiceUrl: setting.termsOfServiceUrl ?? defaults.termsOfServiceUrl,
+    signupEmailTemplate: setting.signupEmailTemplate,
+    forgotPasswordEmailTemplate: setting.forgotPasswordEmailTemplate,
+    magicLinkEmailTemplate: setting.magicLinkEmailTemplate,
+    accountCredentialsEmailTemplate: setting.accountCredentialsEmailTemplate,
+    helpItems,
+  }
+}
+
+/**
+ * Resolve the public-facing tenant settings for a workspace.
+ * Merges env-based defaults with the workspace's `Tenant` branding. The root
+ * tenant carries null branding, so platform workspaces fall back to defaults.
+ * A non-active tenant (suspended) also falls back to defaults.
+ */
+export const resolveTenantSettings = async (args: {
+  workspaceId: string
+  tx?: DatabaseClient
+}): Promise<TenantSettings> => {
+  const workspace = await workspaceService.findById({
+    id: args.workspaceId,
+    tx: args.tx,
+  })
+  const tenant = await tenantService.findById(workspace.tenantId)
+
+  if (!tenant?.status || tenant.status !== "active") {
+    return getDefaultSettings()
+  }
+
+  const [defaults, helpItems] = await Promise.all([
+    getDefaultSettings(),
+    tenantHelpItemService.listByTenant(tenant.id),
+  ])
+  return applyTenantSetting(
+    defaults,
+    tenant,
+    helpItems,
+    await hasEnterpriseFeatures(),
+  )
+}
+
+/**
+ * Resolve the app URL that should be embedded in workspace-generated public
+ * links. Unlike `resolveTenantSettings`, this applies an active custom domain
+ * when the workspace belongs to a non-root tenant.
+ */
+export const resolveWorkspaceAppUrl = async (args: {
+  workspaceId: string
+  tx?: DatabaseClient
+}): Promise<string> => {
+  const workspace = await workspaceService.findById({
+    id: args.workspaceId,
+    tx: args.tx,
+  })
+
+  if (workspace.tenantId !== ROOT_TENANT_ID) {
+    const domains = await customDomainService.findByTenantId(workspace.tenantId)
+    const activeDomain = domains.find((domain) => domain.status === "active")
+    if (activeDomain) {
+      return deriveUrls(`https://${activeDomain.domain}`).appUrl
+    }
+  }
+
+  const env = integrationContextEnv()
+  return deriveUrls(env.NEXT_PUBLIC_BUILDER_URL, undefined, {
+    forceHttps: env.FORCE_PUBLIC_HTTPS,
+  }).appUrl
+}
+
+/**
+ * Resolve the `REALTIME_BROADCAST_SECRET` for a workspace.
+ * Returns the global env var (per-user secrets are an enterprise concern).
+ */
+export const resolveBroadcastSecret = (_args: {
+  workspaceId: string
+}): string => integrationContextEnv().REALTIME_BROADCAST_SECRET
+
+/**
+ * Resolve tenant settings for a reseller/owner directly, without a request
+ * context. Used by out-of-band flows (e.g. provisioning a sub-account from an
+ * admin action) where there is no hostname or workspace to key off. Falls back
+ * to env defaults when the owner has no active tenant.
+ */
+export const resolveTenantSettingsByOwner = async (
+  ownerId: string,
+): Promise<TenantSettings> => {
+  const tenant = await tenantService.findByOwner(ownerId)
+  if (!tenant?.status || tenant.status !== "active") {
+    return getDefaultSettings()
+  }
+  const [defaults, helpItems] = await Promise.all([
+    getDefaultSettings(),
+    tenantHelpItemService.listByTenant(tenant.id),
+  ])
+  return applyTenantSetting(
+    defaults,
+    tenant,
+    helpItems,
+    await hasEnterpriseFeatures(),
+  )
+}
+
+/**
+ * Resolve tenant settings by request hostname (from the `x-domain` header set by
+ * the builder proxy). On enterprise/cloud, maps the active CustomDomain to its
+ * `Tenant` and applies that tenant's branding. On community, returns env defaults.
+ */
+export const resolveTenantSettingsByDomain = async (
+  domain: string | null | undefined,
+): Promise<TenantSettings> => {
+  if (!(domain && (await hasEnterpriseFeatures()))) {
+    return getDefaultSettings()
+  }
+
+  const customDomain = await customDomainService.findActiveByDomain(domain)
+  if (!customDomain) {
+    return getDefaultSettings()
+  }
+
+  const tenant = await tenantService.findById(customDomain.tenantId)
+  if (!tenant?.status || tenant.status !== "active") {
+    return getDefaultSettings()
+  }
+
+  const [defaults, helpItems] = await Promise.all([
+    getDefaultSettings(),
+    tenantHelpItemService.listByTenant(tenant.id),
+  ])
+  const env = integrationContextEnv()
+  return applyTenantSetting(
+    applyCustomDomain(
+      defaults,
+      customDomain.domain,
+      env.NEXT_PUBLIC_STORAGE_URL,
+    ),
+    tenant,
+    helpItems,
+    true,
+  )
+}

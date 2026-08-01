@@ -1,0 +1,166 @@
+"use client"
+
+import type { TagModel } from "@openmeerkat/database/types"
+import { DataTableColumnHeader } from "@openmeerkat/ui/components/data-table/data-table-column-header"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import { Checkbox } from "@openmeerkat/ui/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@openmeerkat/ui/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@openmeerkat/ui/components/ui/tooltip"
+import type { DataTableRowAction } from "@openmeerkat/ui/types/data-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import {
+  EllipsisVerticalIcon,
+  FingerprintIcon,
+  FolderUpIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react"
+import type { useTranslations } from "next-intl"
+import type { Dispatch, SetStateAction } from "react"
+
+type TagWithContacts = TagModel & {
+  contactsCount?: number
+}
+
+type GetColumnsProps = {
+  setRowAction: Dispatch<SetStateAction<DataTableRowAction<TagModel> | null>>
+  handleCopy: (id: string) => void
+  t: ReturnType<typeof useTranslations>
+}
+
+export function getTagColumns({
+  setRowAction,
+  handleCopy,
+  t,
+}: GetColumnsProps): ColumnDef<TagWithContacts>[] {
+  return [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          aria-label={t("actions.selectAll")}
+          checked={table.getIsAllPageRowsSelected()}
+          className="translate-y-0.5"
+          indeterminate={table.getIsSomePageRowsSelected()}
+          onCheckedChange={(value) =>
+            table.toggleAllPageRowsSelected(Boolean(value))
+          }
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={t("actions.selectRow")}
+          checked={row.getIsSelected()}
+          className="translate-y-0.5"
+          onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+        />
+      ),
+      size: 50,
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: "name",
+      accessorKey: "name",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t("fields.name.label")} />
+      ),
+      cell: ({ row }) => (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="inline-block max-w-[300px] truncate">
+                {row.original.name}
+              </div>
+            }
+          />
+          <TooltipContent>
+            <p>{row.original.name}</p>
+          </TooltipContent>
+        </Tooltip>
+      ),
+      size: 300,
+      meta: {
+        label: t("fields.name.label"),
+        placeholder: t("fields.name.placeholder"),
+        variant: "text",
+      },
+      enableColumnFilter: true,
+      enableSorting: true,
+    },
+    {
+      id: "contacts",
+      accessorKey: "contacts",
+      header: ({ column }) => (
+        <DataTableColumnHeader
+          column={column}
+          title={t("fields.contacts.label")}
+        />
+      ),
+      cell: ({ row }) => <div>{row.original.contactsCount ?? 0}</div>,
+      size: 50,
+      meta: {
+        label: t("fields.contacts.label"),
+      },
+      enableHiding: false,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label="Open menu"
+                className="flex size-8 p-0 data-[state=open]:bg-muted"
+                variant="ghost"
+              >
+                <EllipsisVerticalIcon aria-hidden="true" className="size-4" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem
+              onClick={() => setRowAction({ row, variant: "update" })}
+            >
+              <PencilIcon />
+              {t("actions.edit")}
+              <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setRowAction({ row, variant: "move" })}
+            >
+              <FolderUpIcon />
+              {t("actions.move")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopy(`${row.original.id}`)}>
+              <FingerprintIcon />
+              {t("actions.getID")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => setRowAction({ row, variant: "delete" })}
+            >
+              <Trash2Icon className="text-destructive" />
+              {t("actions.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      size: 50,
+      enableSorting: false,
+      enableHiding: false,
+    },
+  ]
+}

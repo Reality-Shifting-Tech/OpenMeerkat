@@ -1,0 +1,165 @@
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
+import { InputField } from "@openmeerkat/ui/components/form/input-field"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { Form } from "@openmeerkat/ui/components/ui/form"
+import { Loader2Icon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import type { ReactElement, ReactNode } from "react"
+import { useState } from "react"
+import { toast } from "sonner"
+import { connectTelegramAction } from "../actions/connect.action"
+import { connectTelegramRequest } from "../schemas/request"
+
+function ConnectStep({
+  index,
+  children,
+}: {
+  index: number
+  children: ReactNode
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-muted-foreground text-sm">
+        {index}
+      </span>
+      <span className="text-muted-foreground text-sm">{children}</span>
+    </li>
+  )
+}
+
+export function TelegramConnect({
+  workspaceId,
+  children,
+  autoOpen = false,
+}: {
+  workspaceId?: string | null
+  children?: ReactElement
+  autoOpen?: boolean
+}) {
+  const t = useTranslations()
+  const router = useRouter()
+  const [open, setOpen] = useState(autoOpen)
+
+  const { form, handleSubmitWithAction } = useHookFormAction(
+    connectTelegramAction,
+    zodResolver(connectTelegramRequest),
+    {
+      actionProps: {
+        onSuccess: () => {
+          setOpen(false)
+          if (workspaceId) {
+            router.push(
+              `/space/${workspaceId}/settings/channels?channel=telegram`,
+            )
+          } else {
+            router.push("/")
+          }
+        },
+        onError: ({ error }) => {
+          if (error.serverError) {
+            toast.error(error.serverError)
+          }
+        },
+      },
+      formProps: {
+        mode: "onChange",
+        defaultValues: {
+          botToken: "",
+          workspaceId,
+        },
+      },
+    },
+  )
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger render={children} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t("actions.addFeature", { feature: t("fields.telegram.label") })}
+          </DialogTitle>
+          <DialogDescription
+            render={
+              <ol className="mt-2 flex list-none flex-col gap-3">
+                <ConnectStep index={1}>
+                  {t.rich("fields.telegram.connectInstructions.step1", {
+                    link: (chunks) => (
+                      <a
+                        className="text-primary underline underline-offset-2"
+                        href="https://t.me/BotFather"
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        {chunks}
+                      </a>
+                    ),
+                  })}
+                </ConnectStep>
+                <ConnectStep index={2}>
+                  {t.rich("fields.telegram.connectInstructions.step2", {
+                    strong: (chunks) => (
+                      <strong className="font-semibold">{chunks}</strong>
+                    ),
+                  })}
+                </ConnectStep>
+                <ConnectStep index={3}>
+                  {t("fields.telegram.connectInstructions.step3")}
+                </ConnectStep>
+              </ol>
+            }
+          />
+        </DialogHeader>
+        <Form {...form}>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={handleSubmitWithAction}
+          >
+            <InputField name="workspaceId" type="hidden" />
+            <InputField
+              label={t("fields.telegram.botToken")}
+              name="botToken"
+              placeholder="123456789:AABBccdd..."
+              required
+              type="password"
+            />
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button type="button" variant="secondary">
+                    {t("actions.cancel")}
+                  </Button>
+                }
+              />
+              <Button
+                disabled={
+                  !form.formState.isValid || form.formState.isSubmitting
+                }
+                type="submit"
+              >
+                {form.formState.isSubmitting && (
+                  <Loader2Icon className="animate-spin" />
+                )}
+                {t("actions.connect")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  )
+}

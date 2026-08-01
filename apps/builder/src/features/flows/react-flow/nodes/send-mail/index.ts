@@ -1,0 +1,19 @@
+import {
+  nodeTypeSchema,
+  sendMailNodeDefaultFn,
+  sendMailNodeSchema,
+} from "@openmeerkat/flow-config"
+import { MailIcon } from "lucide-react"
+import type { TranslationFn } from "../types"
+import { sendMailEditorMenus } from "./menu"
+
+export default function sendMailNodeConfig(t: TranslationFn) {
+  return {
+    defaultFn: sendMailNodeDefaultFn,
+    icon: MailIcon,
+    label: t("actions.sendMail"),
+    menus: sendMailEditorMenus,
+    type: nodeTypeSchema.enum.sendMail,
+    validator: sendMailNodeSchema,
+  }
+}

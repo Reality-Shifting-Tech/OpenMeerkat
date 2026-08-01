@@ -1,0 +1,47 @@
+import type { FieldPath, FieldValues } from "react-hook-form"
+import { Switch } from "../ui/switch"
+import { FormFieldWrapper } from "./field-wrapper"
+
+type SwitchFieldProps<T extends FieldValues> = React.ComponentProps<
+  typeof Switch
+> & {
+  name: FieldPath<T>
+  label?: string
+  required?: boolean
+  description?: string
+  descriptionType?: "inline" | "tooltip"
+  formItemClassName?: string
+  disabled?: boolean
+}
+
+export function SwitchField<T extends FieldValues>(props: SwitchFieldProps<T>) {
+  const {
+    name,
+    label,
+    description,
+    descriptionType = "inline",
+    required,
+    formItemClassName,
+    ...rest
+  } = props
+
+  return (
+    <FormFieldWrapper
+      description={description}
+      descriptionType={descriptionType}
+      formItemClassName={formItemClassName}
+      label={label}
+      name={name}
+      required={required}
+    >
+      {(field) => (
+        <Switch
+          checked={field.value}
+          onCheckedChange={field.onChange}
+          {...rest}
+          {...field}
+        />
+      )}
+    </FormFieldWrapper>
+  )
+}

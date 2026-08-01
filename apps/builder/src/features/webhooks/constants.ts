@@ -1,0 +1,3 @@
+import { MAX_WEBHOOKS_PER_WORKSPACE } from "@openmeerkat/business"
+
+export const MAX_WEBHOOKS_PER_CHATBOT = MAX_WEBHOOKS_PER_WORKSPACE

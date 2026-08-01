@@ -1,0 +1,91 @@
+---
+import "@fontsource-variable/bricolage-grotesque"
+import "@fontsource-variable/outfit"
+import "../styles/global.css"
+
+interface Props {
+  description?: string
+  title?: string
+}
+
+const {
+  title = "OpenMeerkat: open-source omnichannel chatbot platform",
+  description = "OpenMeerkat is the AGPL-3.0, self-hostable omnichannel chatbot platform. Shared inbox, visual flow builder, AI agents, broadcasts, webhooks, public API, CLI, and MCP server.",
+} = Astro.props
+
+const GITHUB = "https://github.com/Reality-Shifting-Tech/OpenMeerkat"
+const CONTACT = "mailto:elias@realityshifting.tech"
+const year = new Date().getFullYear()
+const path = Astro.url.pathname
+
+const navLinks = [
+  { href: "/features", label: "Features" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/docs", label: "Docs" },
+]
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23dbaa4e'/%3E%3Ctext x='16' y='22' font-family='Helvetica' font-weight='bold' font-size='16' fill='%2314100a' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <nav>
+      <div class="wrap nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-mark">M</span>
+          OpenMeerkat
+        </a>
+        <div class="links">
+          {
+            navLinks.map((l) => (
+              <a href={l.href} class={path === l.href ? "active" : ""}>
+                {l.label}
+              </a>
+            ))
+          }
+          <a class="btn primary" href={GITHUB}>GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <slot />
+
+    <div class="wrap">
+      <footer>
+        <span>
+          © {year} <a href="https://realityshiftingtech.com">Reality Shifting Tech</a> · AGPL-3.0
+        </span>
+        <span>
+          <a href={GITHUB}>GitHub</a> · <a href={`${GITHUB}/blob/main/SECURITY.md`}>Security</a> ·
+          <a href={CONTACT}>Contact</a>
+        </span>
+      </footer>
+    </div>
+
+    <script>
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("visible");
+              observer.unobserve(entry.target);
+            }
+          }
+        },
+        { threshold: 0.15 },
+      );
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+    </script>
+  </body>
+</html>

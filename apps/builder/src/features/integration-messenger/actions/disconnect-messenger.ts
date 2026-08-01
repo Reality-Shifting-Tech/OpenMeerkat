@@ -1,0 +1,113 @@
+import {
+  inboxService,
+  instagramIntegrationExistsForPage,
+  workspaceService,
+} from "@openmeerkat/business"
+import { and, db, eq, findOrFail, inArray } from "@openmeerkat/database/client"
+import { channelTypes } from "@openmeerkat/database/partials"
+import {
+  coexistSyncRunModel,
+  integrationMessengerModel,
+  tagChannelModel,
+} from "@openmeerkat/database/schema"
+import {
+  isRevokedTokenError,
+  type MessengerAuthValue,
+} from "@openmeerkat/integration-messenger"
+import { subscribePageToAppWebhook } from "@openmeerkat/integration-messenger/apis/page"
+import { integrations } from "@/integration"
+import { logger } from "@/lib/log"
+
+export const disconnectMessenger = async (ctx: {
+  workspaceId: string
+  id: string
+}) => {
+  const [integrationMessenger, workspace] = await Promise.all([
+    findOrFail({
+      table: integrationMessengerModel,
+      where: {
+        id: ctx.id,
+        workspaceId: ctx.workspaceId,
+      },
+      message: "Integration Messenger not found",
+    }),
+    workspaceService.findById({ id: ctx.workspaceId }),
+  ])
+
+  const authValue = integrationMessenger.auth as MessengerAuthValue
+
+  const hasSharedInstagramIntegration = await instagramIntegrationExistsForPage(
+    {
+      pageId: authValue.metadata.pageId,
+      clientId: authValue.clientId,
+    },
+  )
+
+  if (hasSharedInstagramIntegration) {
+    try {
+      await subscribePageToAppWebhook({
+        pageId: authValue.metadata.pageId,
+        accessToken: authValue.tokens.accessToken,
+        version: authValue.metadata.version,
+        subscribedFields: "general_info",
+      })
+    } catch (error) {
+      logger.warn(
+        {
+          err: error instanceof Error ? error.message : String(error),
+          pageId: authValue.metadata.pageId,
+        },
+        "Failed to preserve shared Messenger webhook subscription during disconnect",
+      )
+    }
+  } else {
+    try {
+      await integrations.messenger.disconnect(authValue)
+    } catch (error) {
+      if (!isRevokedTokenError(error)) {
+        throw error
+      }
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    // Preserve sync history (importedCount / lastSyncedAt / etc.) for audit
+    // and so reconnect can resume from prior watermark. Only abandon ACTIVE
+    // runs so the scheduler stops trying to drive them forward against a
+    // now-missing integration.
+    await tx
+      .update(coexistSyncRunModel)
+      .set({
+        status: "failed",
+        finishedAt: new Date(),
+        currentError: "Integration disconnected",
+      })
+      .where(
+        and(
+          eq(coexistSyncRunModel.integrationId, integrationMessenger.id),
+          inArray(coexistSyncRunModel.status, ["init", "running"]),
+        ),
+      )
+
+    // Polymorphic FK cleanup — no DB-level cascade for TagChannel.integrationId
+    await tx
+      .delete(tagChannelModel)
+      .where(
+        and(
+          eq(tagChannelModel.channelType, channelTypes.enum.messenger),
+          eq(tagChannelModel.integrationId, integrationMessenger.id),
+        ),
+      )
+
+    await tx
+      .delete(integrationMessengerModel)
+      .where(eq(integrationMessengerModel.id, integrationMessenger.id))
+
+    await inboxService.disconnect({
+      inboxId: integrationMessenger.inboxId,
+      ownerId: workspace.ownerId,
+      workspaceId: ctx.workspaceId,
+      tx,
+    })
+  })
+}

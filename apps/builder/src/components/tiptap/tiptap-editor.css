@@ -1,0 +1,92 @@
+.react-renderer {
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+/* Dropdown menu */
+.dropdown-menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem;
+  overflow: auto;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-100);
+  border-radius: 0.7rem;
+  box-shadow: var(--shadow-md);
+  /* min-width: 150px; */
+
+  button {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+    background-color: transparent;
+
+    &:hover,
+    &:hover.is-selected {
+      background-color: var(--color-gray-200);
+
+      @media (prefers-color-scheme: dark) {
+        color: var(--color-gray-100);
+        background-color: var(--color-gray-700);
+      }
+    }
+
+    &.is-selected {
+      background-color: var(--color-gray-300);
+
+      @media (prefers-color-scheme: dark) {
+        color: var(--color-gray-100);
+        background-color: var(--color-gray-700);
+      }
+    }
+
+    img {
+      width: 1em;
+      height: 1em;
+    }
+  }
+}
+
+.tiptap {
+  padding: 0.25rem 0.75rem;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 0.5rem;
+}
+
+.tiptap.tiptap-plain-text {
+  white-space: pre-wrap;
+}
+
+/* Single-line variant for compact inputs (e.g. filter value fields). */
+/* Vertical centering via line-height (not flex) keeps the ProseMirror caret stable. */
+.tiptap.tiptap-plain-text-inline {
+  min-height: 2.25rem;
+  padding-right: 2.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.tiptap.tiptap-plain-text-inline p {
+  margin: 0;
+  line-height: 1.625rem;
+}
+
+.tiptap.tiptap-plain-text-inline::-webkit-scrollbar {
+  height: 0;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  font-size: 14px;
+  color: var(--color-gray-300);
+  pointer-events: none;
+  content: attr(data-placeholder);
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://v2-9-15.turborepo.dev/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "test": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*",
+        "vitest.config.ts",
+        "vitest.config.*.ts",
+        "**/__tests__/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+      ],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "https": {
+      "cache": false,
+      "persistent": true
+    },
+    "packages:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:migrate": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:setup": {
+      "cache": false
+    },
+    "db:reset": {
+      "cache": false
+    },
+    "db:studio": {
+      "cache": false
+    }
+  }
+}

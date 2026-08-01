@@ -1,0 +1,35 @@
+"use client"
+
+import { ComboboxField } from "@openmeerkat/ui/components/form/combobox-field"
+import { MessageCirclePlusIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
+import { useContactAssigneeOptions } from "@/features/users/provider/user-hook"
+import { BaseStepEditor } from "../base/editor"
+
+type AssignConversationStepEditorProps = {
+  parentName: string
+}
+
+const AssignConversationStepEditor = (
+  props: AssignConversationStepEditorProps,
+) => {
+  const t = useTranslations()
+  const contactAssigneeOptions = useContactAssigneeOptions()
+
+  return (
+    <BaseStepEditor
+      icon={MessageCirclePlusIcon}
+      title={t("flows.actions.assignConversation")}
+    >
+      <ComboboxField
+        emptyText={t("actions.noRecordFound")}
+        label={t("fields.agent.label")}
+        name={`${props.parentName}.assignedId`}
+        options={contactAssigneeOptions}
+        placeholder={t("actions.pleaseSelect")}
+      />
+    </BaseStepEditor>
+  )
+}
+
+export default AssignConversationStepEditor

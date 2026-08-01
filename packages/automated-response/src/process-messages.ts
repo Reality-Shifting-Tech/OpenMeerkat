@@ -1,0 +1,168 @@
+import { trackingResponseTypes } from "@openmeerkat/analytics"
+import { db } from "@openmeerkat/database/client"
+import {
+  createMessageRepository,
+  getSafeSinceTime,
+} from "@openmeerkat/database/repositories"
+import type {
+  ContactInboxModel,
+  ConversationModel,
+  MessageModel,
+} from "@openmeerkat/database/types"
+import { webhookChannelOrigin } from "@openmeerkat/events/context"
+import { simpleQueue } from "@openmeerkat/redis"
+import { contactVariableService } from "@openmeerkat/variables"
+import {
+  ChatJobAction,
+  chatQueue,
+  IntegrationJobAction,
+  integrationQueue,
+} from "@openmeerkat/worker-config"
+import { getKey } from "./constants"
+import { keywordMatchesText } from "./keyword-match"
+import { logger } from "./lib/logger"
+import { automatedResponseService } from "./utils"
+
+export const processPendingMessages = async (props: {
+  conversation: ConversationModel
+  contactInbox: ContactInboxModel
+}): Promise<boolean> => {
+  const result = await getMessagesFromStoreAndProcess(props)
+
+  // Clear the queue after processing
+  await simpleQueue.clear(
+    getKey({
+      conversationId: props.conversation.id,
+      contactInboxId: props.contactInbox.id,
+    }),
+  )
+
+  return result
+}
+
+const getMessagesFromStoreAndProcess = async (props: {
+  conversation: ConversationModel
+  contactInbox: ContactInboxModel
+}): Promise<boolean> => {
+  const key = getKey({
+    conversationId: props.conversation.id,
+    contactInboxId: props.contactInbox.id,
+  })
+
+  const messageIds = await simpleQueue.getAll(key)
+  if (messageIds.length === 0) {
+    logger.debug(props, "Automated response queue is empty")
+    return false
+  }
+
+  // Only process text messages
+  const messageRepository = await createMessageRepository()
+  const messages = await messageRepository
+    .findManyByIds(
+      messageIds,
+      props.contactInbox.id,
+      getSafeSinceTime(
+        props.contactInbox.lastMessageAt,
+        365 * 24 * 60 * 60 * 1000, // 1 year
+      ),
+      props.conversation.workspaceId,
+    )
+    .then((data) => data.filter((v) => Boolean(v.text)))
+  if (messages.length === 0) {
+    logger.debug(props, "No message to process")
+    return false
+  }
+
+  return replyByAutomatedResponse({
+    conversation: props.conversation,
+    contactInbox: props.contactInbox,
+    messages,
+  })
+}
+
+const replyByAutomatedResponse = async (props: {
+  conversation: ConversationModel
+  contactInbox: ContactInboxModel
+  messages: Pick<MessageModel, "id" | "text">[]
+}): Promise<boolean> => {
+  const { conversation, contactInbox, messages } = props
+  const allAutomatedResponses = await automatedResponseService.getAll(
+    conversation.workspaceId,
+  )
+
+  let replied = false
+  for (const message of messages) {
+    if (!message.text) {
+      continue
+    }
+    const text = message.text.toLowerCase()
+    for (const automatedResponse of allAutomatedResponses) {
+      const matched = keywordMatchesText(automatedResponse.keywords, text)
+
+      if (!matched) {
+        continue
+      }
+
+      if (automatedResponse.flowId) {
+        const flow = await db.query.flowModel.findFirst({
+          where: {
+            id: automatedResponse.flowId,
+            currentVersionId: { isNotNull: true },
+          },
+        })
+        if (flow) {
+          await integrationQueue.add(IntegrationJobAction.sendFlow, {
+            type: IntegrationJobAction.sendFlow,
+            data: {
+              conversationId: conversation.id,
+              contactInboxId: contactInbox.id,
+              flowId: flow.id,
+              trackingContext: {
+                aiProvider: "none",
+                messageId: message.id,
+                conversationId: conversation.id,
+                responseType: "automated_response",
+                startTime: Date.now(),
+                triggerType: "contact_message_in",
+                workspaceId: conversation.workspaceId,
+              },
+              origin: webhookChannelOrigin(),
+            },
+          })
+          replied = true
+          return replied
+        }
+      } else if (automatedResponse.text) {
+        const variables = await contactVariableService.getAll({
+          contactId: conversation.contactId,
+          contactInbox,
+          conversation,
+        })
+        const stepMessage = await contactVariableService.replaceAll({
+          text: automatedResponse.text,
+          variables,
+        })
+        await chatQueue.add(ChatJobAction.sendChatMessage, {
+          type: ChatJobAction.sendChatMessage,
+          data: {
+            conversation,
+            text: stepMessage,
+            trackingContext: {
+              aiProvider: "none",
+              conversationId: conversation.id,
+              messageId: message.id,
+              responseType: trackingResponseTypes.enum.automated_response,
+              startTime: Date.now(),
+              triggerType: "contact_message_int",
+              workspaceId: conversation.workspaceId,
+            },
+          },
+        })
+        replied = true
+        return replied
+      }
+    }
+  }
+
+  return replied
+}

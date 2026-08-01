@@ -1,0 +1,36 @@
+"use server"
+
+import { db, eq, findOrFail } from "@openmeerkat/database/client"
+import { savedReplyModel } from "@openmeerkat/database/schema"
+import { zodBigintAsString } from "@openmeerkat/utils"
+import { workspaceActionClient } from "@/lib/safe-action"
+import { editSavedReplyRequest } from "../schema/mutation"
+
+export const editSavedReplyAction = workspaceActionClient
+  .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()] as const)
+  .inputSchema(editSavedReplyRequest)
+  .action(async (props) => {
+    const {
+      bindArgsParsedInputs: [workspaceId, id],
+      parsedInput,
+    } = props
+
+    const savedReply = await findOrFail({
+      table: savedReplyModel,
+      where: {
+        id,
+        workspaceId,
+      },
+      message: "Saved reply not found",
+    })
+    const [updatedSavedReply] = await db
+      .update(savedReplyModel)
+      .set({
+        shortcut: parsedInput.shortcut,
+        text: parsedInput.text,
+      })
+      .where(eq(savedReplyModel.id, savedReply.id))
+      .returning()
+
+    return updatedSavedReply
+  })

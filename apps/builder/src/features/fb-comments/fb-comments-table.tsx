@@ -1,0 +1,350 @@
+"use client"
+
+import { folderTypes } from "@openmeerkat/database/partials"
+import { DataTable } from "@openmeerkat/ui/components/data-table/data-table"
+import { DataTableColumnHeader } from "@openmeerkat/ui/components/data-table/data-table-column-header"
+import { DataTableToolbar } from "@openmeerkat/ui/components/data-table/data-table-toolbar"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import { Checkbox } from "@openmeerkat/ui/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@openmeerkat/ui/components/ui/dropdown-menu"
+import { Switch } from "@openmeerkat/ui/components/ui/switch"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@openmeerkat/ui/components/ui/tooltip"
+import { useDataTable } from "@openmeerkat/ui/hooks/use-data-table"
+import type { DataTableRowAction } from "@openmeerkat/ui/types/data-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import {
+  FolderUpIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  TextIcon,
+  Trash2Icon,
+} from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import React, { use, useCallback, useMemo } from "react"
+import { toast } from "sonner"
+import { ChangeFolderDialog } from "../folders/change-folder"
+import { BulkDeleteCommentAutomationsDialog } from "../shared/comment-automation/bulk-delete-comment-automations-dialog"
+import { BulkMoveCommentAutomationFolderDialog } from "../shared/comment-automation/bulk-move-comment-automation-folder-dialog"
+import { CommentAutomationScheduleDialog } from "../shared/comment-automation/comment-automation-schedule-dialog"
+import { DeleteCommentAutomationDialog } from "../shared/comment-automation/delete-comment-automation-dialog"
+import { RenameCommentAutomationDialog } from "../shared/comment-automation/rename-comment-automation-dialog"
+import { deleteFbCommentAction } from "./actions/delete-fb-comment.action"
+import { updateFbCommentAction } from "./actions/update-fb-comment.action"
+import type { listFbComments } from "./queries"
+import type { ListFbCommentsResponse } from "./schema/action"
+
+type FbCommentsTableProps = {
+  workspaceId: string
+  promises: Promise<[Awaited<ReturnType<typeof listFbComments>>]>
+}
+
+export function FbCommentsTable({
+  workspaceId,
+  promises,
+}: FbCommentsTableProps) {
+  const t = useTranslations()
+  const router = useRouter()
+
+  const [{ data, pageCount }] = use(promises)
+
+  const [rowAction, setRowAction] = React.useState<DataTableRowAction<
+    ListFbCommentsResponse["data"][number]
+  > | null>(null)
+
+  const [scheduleDialogItem, setScheduleDialogItem] = React.useState<
+    ListFbCommentsResponse["data"][number] | null
+  >(null)
+
+  const handleToggleStatus = useCallback(
+    async (item: ListFbCommentsResponse["data"][number]) => {
+      if (!item.isActive) {
+        setScheduleDialogItem(item)
+        return
+      }
+
+      try {
+        await updateFbCommentAction(workspaceId, item.id, {
+          isActive: false,
+        })
+        toast.success(t("facebookCommentAutomation.deactivated"))
+        router.refresh()
+      } catch {
+        toast.error(t("messages.unknownError"))
+      }
+    },
+    [workspaceId, t, router],
+  )
+
+  const columns = useMemo<ColumnDef<ListFbCommentsResponse["data"][number]>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table: dataTable }) => (
+          <Checkbox
+            aria-label={t("actions.selectAll")}
+            checked={dataTable.getIsAllPageRowsSelected()}
+            className="translate-y-0.5 cursor-pointer"
+            indeterminate={dataTable.getIsSomePageRowsSelected()}
+            onCheckedChange={(value) =>
+              dataTable.toggleAllPageRowsSelected(Boolean(value))
+            }
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            aria-label={t("actions.selectRow")}
+            checked={row.getIsSelected()}
+            className="translate-y-0.5 cursor-pointer"
+            onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+          />
+        ),
+        size: 50,
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
+        id: "name",
+        accessorKey: "name",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title={t("fields.name.label")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="max-w-75 truncate">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    className="truncate"
+                    href={`/space/${workspaceId}/fb-comments/${row.original.id}`}
+                  >
+                    {row.original.name ?? ""}
+                  </Link>
+                }
+              />
+              <TooltipContent>
+                <p>{row.original.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ),
+        meta: {
+          label: t("fields.name.label"),
+          placeholder: t("fields.name.placeholder"),
+          variant: "text",
+        },
+        size: 300,
+        enableSorting: true,
+        enableColumnFilter: true,
+      },
+      {
+        accessorKey: "isActive",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="w-full justify-center"
+            column={column}
+            title={t("fields.status.label")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center">
+            <Switch
+              checked={row.original.isActive}
+              onCheckedChange={() => handleToggleStatus(row.original)}
+            />
+          </div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: "repliesCount",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="w-full justify-center"
+            column={column}
+            title={t("facebookCommentAutomation.replies")}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center">{row.original.repliesCount}</div>
+        ),
+        size: 100,
+      },
+      {
+        id: "actions",
+        header: () => (
+          <div className="w-full text-center">{t("actions.actions")}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button size="icon" variant="ghost">
+                    <MoreHorizontalIcon className="h-4 w-4" />
+                    <span className="sr-only">Open menu</span>
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() =>
+                    router.push(
+                      `/space/${workspaceId}/fb-comments/${row.original.id}`,
+                    )
+                  }
+                >
+                  <PencilIcon className="me-2" />
+                  {t("actions.edit")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setRowAction({ row, variant: "update" })}
+                >
+                  <TextIcon className="me-2" />
+                  {t("actions.rename")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setRowAction({ row, variant: "move" })}
+                >
+                  <FolderUpIcon className="me-2" />
+                  {t("actions.move")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="hover:bg-muted hover:text-destructive"
+                  onClick={() => setRowAction({ row, variant: "delete" })}
+                >
+                  <Trash2Icon className="me-2" />
+                  {t("actions.delete")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+        size: 50,
+        enableSorting: false,
+        enableHiding: false,
+      },
+    ],
+    [t, workspaceId, handleToggleStatus, router],
+  )
+
+  const { table } = useDataTable({
+    data,
+    columns,
+    pageCount,
+    initialState: {
+      sorting: [{ id: "createdAt", desc: true }],
+      columnPinning: { right: ["actions"] },
+    },
+    getRowId: (originalRow) => originalRow.id,
+    clearOnDefault: true,
+    shallow: false,
+  })
+
+  const selectedRows = table.getFilteredSelectedRowModel().rows
+
+  return (
+    <>
+      <DataTable table={table}>
+        <DataTableToolbar table={table}>
+          <div className="flex items-center gap-2">
+            {selectedRows.length > 0 ? (
+              <>
+                <BulkDeleteCommentAutomationsDialog
+                  deleteAction={deleteFbCommentAction}
+                  items={selectedRows.map((row) => row.original)}
+                  onOpenChange={() => setRowAction(null)}
+                  onSuccess={() => {
+                    table.toggleAllRowsSelected(false)
+                    router.refresh()
+                  }}
+                  translationNamespace="facebookCommentAutomation"
+                />
+                <BulkMoveCommentAutomationFolderDialog
+                  folderType={folderTypes.enum.fbComment}
+                  items={selectedRows.map((row) => row.original)}
+                  onOpenChange={() => setRowAction(null)}
+                  onSuccess={() => {
+                    table.toggleAllRowsSelected(false)
+                    router.refresh()
+                  }}
+                  translationNamespace="facebookCommentAutomation"
+                  workspaceId={workspaceId}
+                />
+              </>
+            ) : null}
+            <Button
+              render={
+                <Link href={`/space/${workspaceId}/fb-comments/create`}>
+                  {t("facebookCommentAutomation.create")}
+                </Link>
+              }
+              size="sm"
+            />
+          </div>
+        </DataTableToolbar>
+      </DataTable>
+
+      <RenameCommentAutomationDialog
+        action={updateFbCommentAction.bind(
+          null,
+          rowAction?.row.original?.workspaceId ?? "",
+          rowAction?.row.original?.id ?? "",
+        )}
+        onOpenChange={() => setRowAction(null)}
+        onSuccess={() => router.refresh()}
+        open={rowAction?.variant === "update"}
+        resource={rowAction?.row.original || null}
+        translationNamespace="facebookCommentAutomation"
+      />
+
+      <ChangeFolderDialog
+        currentFolderId={rowAction?.row.original?.folderId || null}
+        folderType={folderTypes.enum.fbComment}
+        modelIds={rowAction?.row.original ? [rowAction.row.original.id] : []}
+        onOpenChange={() => setRowAction(null)}
+        open={rowAction?.variant === "move"}
+        workspaceId={workspaceId}
+      />
+
+      <DeleteCommentAutomationDialog
+        action={deleteFbCommentAction.bind(
+          null,
+          rowAction?.row.original?.workspaceId ?? "",
+          rowAction?.row.original?.id ?? "",
+        )}
+        onOpenChange={() => setRowAction(null)}
+        onSuccess={() => router.refresh()}
+        open={rowAction?.variant === "delete"}
+        resource={rowAction?.row.original || null}
+        translationNamespace="facebookCommentAutomation"
+      />
+
+      <CommentAutomationScheduleDialog
+        action={updateFbCommentAction.bind(
+          null,
+          scheduleDialogItem?.workspaceId ?? "",
+          scheduleDialogItem?.id ?? "",
+        )}
+        onOpenChange={() => setScheduleDialogItem(null)}
+        onSuccess={() => router.refresh()}
+        open={!!scheduleDialogItem}
+        resource={scheduleDialogItem}
+        translationNamespace="facebookCommentAutomation"
+      />
+    </>
+  )
+}

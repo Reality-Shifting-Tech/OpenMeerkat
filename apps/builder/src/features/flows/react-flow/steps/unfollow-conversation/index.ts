@@ -1,0 +1,16 @@
+import {
+  type UnfollowConversationStepSchema,
+  unfollowConversationStepDefaultFn,
+  unfollowConversationStepSchema,
+} from "@openmeerkat/flow-config"
+import type { StepDefinition } from "../definition"
+import UnfollowConversationStepEditor from "./editor"
+import UnfollowConversationStepViewer from "./viewer"
+
+export const unfollowConversationStep: StepDefinition<UnfollowConversationStepSchema> =
+  {
+    editor: UnfollowConversationStepEditor,
+    viewer: UnfollowConversationStepViewer,
+    validator: unfollowConversationStepSchema,
+    defaultFn: unfollowConversationStepDefaultFn,
+  }

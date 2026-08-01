@@ -1,0 +1,106 @@
+import type { ListInboxesResponse, RefConfig } from "@openmeerkat/business"
+import { buildInboxLink } from "@openmeerkat/business/utils"
+import type { ChannelType } from "@openmeerkat/database/partials"
+import type { InboxWithIntegrations } from "@openmeerkat/database/types"
+import { Button } from "@openmeerkat/ui/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@openmeerkat/ui/components/ui/dialog"
+import { useTranslations } from "next-intl"
+import { InboxIcon } from "@/features/inboxes/components/inbox-icon"
+import { useInboxStore } from "@/features/inboxes/provider/inbox-store-context"
+import { ScanQRCodeDialog } from "@/features/qr-codes/scan-qrcode"
+import { useTenantSettings } from "@/features/tenant"
+import { useClipboard } from "@/hooks/use-clipboard"
+
+type GetInboxUrlDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  refConfig?: RefConfig
+}
+export function GetInboxUrlDialog({
+  open,
+  onOpenChange,
+  refConfig,
+}: GetInboxUrlDialogProps) {
+  const { inboxes } = useInboxStore((state) => state)
+  const { appUrl } = useTenantSettings()
+  const skipChannels: ChannelType[] = ["smtp", "tiktok"]
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Get Link</DialogTitle>
+          <DialogDescription />
+        </DialogHeader>
+
+        <div className="flex max-h-[60vh] flex-col overflow-y-auto">
+          {inboxes
+            .filter(
+              (inbox) => !skipChannels.includes(inbox.channel as ChannelType),
+            )
+            .map((inbox) => (
+              <GetInboxUrlItem
+                appUrl={appUrl}
+                inbox={inbox}
+                key={inbox.id}
+                refConfig={refConfig}
+              />
+            ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function GetInboxUrlItem({
+  appUrl,
+  inbox,
+  refConfig,
+}: {
+  appUrl: string
+  inbox: ListInboxesResponse["data"][number]
+  refConfig?: RefConfig
+}) {
+  const t = useTranslations()
+  const { handleCopy } = useClipboard()
+
+  const url = buildInboxLink(appUrl, inbox as InboxWithIntegrations, refConfig)
+
+  if (!url) {
+    return null
+  }
+
+  return (
+    <div
+      className="flex w-full items-center gap-3 border-t py-4 first:border-t-0"
+      key={inbox.id}
+    >
+      <div className="min-w-0 flex-1">
+        <InboxIcon
+          channel={inbox.channel as ChannelType}
+          iconClassName="size-6"
+          label={inbox.name}
+          size="large"
+        />
+      </div>
+
+      <Button onClick={() => handleCopy(url)} size="sm" variant="outline">
+        {t("actions.copy")}
+      </Button>
+
+      <ScanQRCodeDialog
+        link={url}
+        title={t("actions.connectFeature", {
+          feature: inbox.name,
+        })}
+        triggerName={t("actions.qrCode")}
+      />
+    </div>
+  )
+}

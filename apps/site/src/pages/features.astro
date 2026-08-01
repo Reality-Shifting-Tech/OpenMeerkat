@@ -1,0 +1,177 @@
+---
+const GITHUB = "https://github.com/Reality-Shifting-Tech/OpenMeerkat"
+const CONTACT = "mailto:elias@realityshifting.tech"
+
+const details = [
+  {
+    title: "Shared inbox",
+    body: "Every channel lands in one conversation list: WhatsApp, Messenger, Instagram, Telegram, TikTok, Zalo, webchat, and email. The realtime server pushes updates as they happen, and each contact carries their full history with them.",
+    points: [
+      "One conversation list across every connected channel",
+      "Realtime message and status updates",
+      "Full conversation history per contact",
+    ],
+  },
+  {
+    title: "Visual flow builder",
+    body: "Build conversations on a canvas: triggers, conditions, variables, and actions connected visually. Publish a flow to any connected channel and iterate without redeploys.",
+    points: [
+      "Node-based visual canvas",
+      "Triggers, conditions, variables, and actions",
+      "Publish once, run on every connected channel",
+    ],
+  },
+  {
+    title: "AI agents",
+    body: "Wire the LLM provider you already use, give agents instructions and knowledge, and let them answer from the inbox. Agents live inside your flows, with escalation to a human when they are out of depth.",
+    points: [
+      "Provider-agnostic model configuration",
+      "Instructions and knowledge per agent",
+      "Human escalation and handoff",
+    ],
+  },
+  {
+    title: "Broadcasts and sequences",
+    body: "Target a segment with the contact filter, schedule a broadcast or a multi-step sequence, and watch delivery status per contact from the builder.",
+    points: [
+      "Contact filters and segments",
+      "Scheduled broadcasts and sequences",
+      "Per-contact delivery status",
+    ],
+  },
+  {
+    title: "Webhooks",
+    body: "Your stack hears about everything that matters. Subscribe to conversation, message, and agent events and receive JSON over HTTPS with retries.",
+    points: [
+      "Conversation, message, and agent events",
+      "Retries with backoff",
+      "JSON over HTTPS",
+    ],
+  },
+  {
+    title: "Public API",
+    body: "A typed JSON API over /v1 with API keys scoped to a workspace. Conversations, contacts, flows, broadcasts, and agents are all scriptable, and the API is described with OpenAPI metadata.",
+    points: [
+      "Typed JSON API over /v1",
+      "Workspace-scoped API keys",
+      "OpenAPI metadata for tooling",
+    ],
+  },
+  {
+    title: "CLI",
+    body: "Manage the platform without opening the browser. The OpenMeerkat CLI creates workspaces, connects channels, and runs setup steps, which makes it scriptable and CI-friendly.",
+    points: [
+      "Workspace bootstrap from the terminal",
+      "Channel connections from the terminal",
+      "Scriptable for CI and automation",
+    ],
+  },
+  {
+    title: "MCP server",
+    body: "The bundled MCP server exposes the public API surface to any MCP-capable agent. Agents can read conversations, draft replies, inspect flows, and prepare broadcasts while humans keep final control.",
+    points: [
+      "Full API surface over MCP",
+      "Works with any MCP client",
+      "Same workspace-scoped auth as the API",
+    ],
+  },
+]
+---
+
+<Layout
+  title="Features | OpenMeerkat"
+  description="The OpenMeerkat community edition: shared inbox, visual flow builder, AI agents, broadcasts, webhooks, public API, CLI, and MCP server."
+>
+  <section class="page-hero">
+    <div class="wrap">
+      <p class="kicker">Features</p>
+      <h1>Everything in the community edition.</h1>
+      <p class="lede">
+        OpenMeerkat ships the full community feature set: channels, a shared
+        inbox, a visual flow builder, AI agents, broadcasts, contacts,
+        automations, analytics, webhooks, a public API, a CLI, and an MCP
+        server. No feature gates, no license keys, no per-seat pricing.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <h2>The open core, in detail.</h2>
+        <p class="sub">
+          Each area below is a first-class part of the platform, not a plugin
+          afterthought. They compose: agents run inside flows, flows publish to
+          channels, and every operation is scriptable through the API, the CLI,
+          or the MCP server.
+        </p>
+      </div>
+
+      <div class="details">
+        {
+          details.map((d) => (
+            <div class="detail">
+              <h3>{d.title}</h3>
+              <div>
+                <p>{d.body}</p>
+                <ul>
+                  {d.points.map((p) => <li>{p}</li>)}
+                </ul>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <h2>What is not in this distribution.</h2>
+        <p class="sub">
+          We want to be explicit about scope. OpenMeerkat is the community
+          edition of the platform, and a few enterprise areas are deliberately
+          not part of it.
+        </p>
+      </div>
+
+      <div class="callout">
+        <div>
+          <p class="license-line">community edition · open core · AGPL-3.0</p>
+          <h3>Honest about scope.</h3>
+          <p class="sub">
+            Enterprise billing, audit logs, team inbox roles, platform
+            branding, and email templates are not part of this distribution.
+            If your organization needs those, contact us: we can scope a custom
+            build on top of the open core. The community edition stays free and
+            complete for everyone else.
+          </p>
+          <div class="cta">
+            <a class="btn ghost" href={CONTACT}>Talk to us</a>
+            <a class="btn text" href="/pricing">See pricing →</a>
+          </div>
+        </div>
+        <a class="big-link" href={GITHUB}>
+          <p class="license-line">the code</p>
+          <p class="value">AGPL-3.0</p>
+          <p class="sub">Audit it, fork it, run it.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Read the code before you deploy it.</h2>
+      <p>
+        OpenMeerkat is on GitHub. Star it, fork it, and connect a channel
+        before lunch.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href={GITHUB}>Star on GitHub</a>
+        <a class="btn primary dark" href="/docs">Self-host in 5 minutes</a>
+      </div>
+    </div>
+  </section>
+</Layout>
