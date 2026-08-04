@@ -1,4 +1,4 @@
-# <img src="assets/logo.png" alt="OpenMeerkat 🐾" width="56" /> OpenMeerkat 🐾
+# <img src="assets/logo.png" alt="" width="56" /> OpenMeerkat 🐾
 
 > The open-source, self-hostable, agent-native omnichannel chatbot platform.
 
