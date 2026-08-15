@@ -24,7 +24,7 @@
     "@openmeerkat/typescript-config": "workspace:*",
     "@openmeerkat/vitest-config": "workspace:*",
     "@types/node": "^24.10.1",
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.12",
     "vitest": "^4.1.0"
   },
   "scripts": {
