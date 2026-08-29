@@ -7,7 +7,7 @@
     "@openmeerkat/logger": "workspace:*",
     "@openmeerkat/sdk": "workspace:*",
     "ky": "^2.0.2",
-    "libphonenumber-js": "^1.12.42",
+    "libphonenumber-js": "^1.13.11",
     "zod": "^4.3.6"
   },
   "devDependencies": {
