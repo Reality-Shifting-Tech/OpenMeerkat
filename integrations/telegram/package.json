@@ -9,15 +9,15 @@
     "@openmeerkat/logger": "workspace:*",
     "@openmeerkat/sdk": "workspace:*",
     "@openmeerkat/utils": "workspace:*",
-    "ky": "^2.0.2",
-    "remeda": "^2.34.0",
-    "zod": "^4.3.6"
+    "ky": "^2.1.0",
+    "remeda": "^2.50.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",
     "@openmeerkat/vitest-config": "workspace:*",
     "@types/node": "^24.10.4",
-    "msw": "^2.7.3",
+    "msw": "^2.15.0",
     "typescript": "^5",
     "vitest": "^4.1.0"
   },
