@@ -9,9 +9,9 @@
     "@openmeerkat/logger": "workspace:*",
     "@openmeerkat/sdk": "workspace:*",
     "@openmeerkat/utils": "workspace:*",
-    "ky": "^2.0.2",
-    "remeda": "^2.34.0",
-    "zod": "^4.3.6"
+    "ky": "^2.1.0",
+    "remeda": "^2.50.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",

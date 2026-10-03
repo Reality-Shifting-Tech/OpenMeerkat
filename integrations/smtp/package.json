@@ -10,7 +10,7 @@
   "dependencies": {
     "@openmeerkat/sdk": "workspace:*",
     "nodemailer": "^8.0.7",
-    "zod": "^4.3.6"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",

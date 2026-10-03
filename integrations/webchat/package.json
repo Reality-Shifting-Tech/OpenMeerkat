@@ -5,7 +5,7 @@
   "type": "module",
   "dependencies": {
     "@openmeerkat/sdk": "workspace:*",
-    "ky": "^2.0.2"
+    "ky": "^2.1.0"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",

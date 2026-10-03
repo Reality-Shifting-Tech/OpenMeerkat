@@ -6,9 +6,9 @@
   "dependencies": {
     "@openmeerkat/logger": "workspace:*",
     "@openmeerkat/sdk": "workspace:*",
-    "ky": "^2.0.2",
-    "libphonenumber-js": "^1.12.42",
-    "zod": "^4.3.6"
+    "ky": "^2.1.0",
+    "libphonenumber-js": "^1.13.14",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",
