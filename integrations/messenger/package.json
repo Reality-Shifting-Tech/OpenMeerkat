@@ -11,10 +11,10 @@
     "@openmeerkat/utils": "workspace:*",
     "@types/node": "^24.10.4",
     "cross-fetch": "^4.1.0",
-    "image-size": "^2.0.2",
-    "ky": "^2.0.2",
-    "remeda": "^2.34.0",
-    "zod": "^4.3.6"
+    "image-size": "^2.0.4",
+    "ky": "^2.2.0",
+    "remeda": "^2.53.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",

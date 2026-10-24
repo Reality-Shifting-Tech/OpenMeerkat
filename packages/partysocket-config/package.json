@@ -12,9 +12,9 @@
   "dependencies": {
     "@openmeerkat/logger": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "jose": "^6.2.3",
-    "ky": "^2.0.2",
-    "zod": "^4.3.6"
+    "jose": "^6.2.13",
+    "ky": "^2.2.0",
+    "zod": "^4.6.7"
   },
   "exports": {
     ".": "./src/index.ts",

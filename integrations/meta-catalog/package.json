@@ -8,8 +8,8 @@
     "@openmeerkat/integration-messenger": "workspace:*",
     "@openmeerkat/logger": "workspace:*",
     "@openmeerkat/sdk": "workspace:*",
-    "ky": "^2.0.2",
-    "zod": "^4.3.6"
+    "ky": "^2.2.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@openmeerkat/typescript-config": "workspace:*",
